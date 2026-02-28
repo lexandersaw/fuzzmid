@@ -124,47 +124,45 @@
 
 ### 2.1 AI 功能增强
 
-#### 2.1.1 多 AI 提供商支持 [FEATURE]
+#### 2.1.1 OpenAI 兼容 API 配置优化 [FEATURE]
 
 **需求描述**:
-扩展 AI 提供商支持，允许用户选择不同的 AI 服务。
+优化 OpenAI 兼容 API 的配置体验，支持自定义 base_url、api_key、model，兼容所有 OpenAI 格式的 API 服务。
 
 **实现方案**:
-1. 创建 `AIProviderFactory` 工厂类
-2. 实现以下提供商:
-   - `OpenAIProvider`: OpenAI 官方 API
-   - `AzureOpenAIProvider`: Azure OpenAI 服务
-   - `AnthropicProvider`: Claude API
-   - `OllamaProvider`: 本地 Ollama 服务
-   - `CustomProvider`: 自定义 API 端点
-
-**新增文件**:
-```
-src/main/java/burp/ai/
-├── AIProviderFactory.java
-├── OpenAIProvider.java
-├── AzureOpenAIProvider.java
-├── AnthropicProvider.java
-└── OllamaProvider.java
-```
+1. 简化配置结构，只保留必要的三个配置项
+2. 支持的兼容服务:
+   - OpenAI 官方 API
+   - Azure OpenAI
+   - 各种第三方 OpenAI 兼容服务
+   - 本地部署的兼容服务 (如 Ollama、LocalAI、vLLM)
 
 **配置结构**:
 ```yaml
 ai:
-  provider: "openai"  # openai/azure/anthropic/ollama/custom
-  providers:
-    openai:
-      api_key: "sk-xxx"
-      model: "gpt-4"
-    anthropic:
-      api_key: "sk-ant-xxx"
-      model: "claude-3-opus-20240229"
-    ollama:
-      base_url: "http://localhost:11434/api"
-      model: "llama2"
+  api:
+    base_url: "https://api.openai.com/v1/chat/completions"
+    api_key: "sk-xxx"
+    model: "gpt-4"
 ```
 
-**优先级**: P1 (高)
+**UI 配置界面**:
+```
+API 配置:
+┌─────────────────────────────────────────┐
+│ Base URL: [https://api.openai.com/v1... ]│
+│ API Key:  [sk-***************************]│
+│ Model:    [gpt-4                      ▼]│
+│                                          │
+│ 常用 Model:                              │
+│ - gpt-4 / gpt-4-turbo                    │
+│ - gpt-3.5-turbo                          │
+│ - claude-3-opus (兼容服务)               │
+│ - deepseek-chat (兼容服务)               │
+└─────────────────────────────────────────┘
+```
+
+**优先级**: P2 (中)
 
 ---
 
@@ -645,13 +643,13 @@ src/main/java/burp/waf/
 
 | 任务 | 优先级 | 预计工时 |
 |------|--------|----------|
-| 多 AI 提供商支持 | P1 | 8h |
+| OpenAI 兼容 API 配置优化 | P2 | 2h |
 | 智能 Payload 变异 | P1 | 12h |
 | 深度技术栈识别 | P1 | 8h |
 | WAF 指纹识别 | P1 | 6h |
 | 自适应绕过策略 | P1 | 8h |
 
-**预计总工时**: 42h
+**预计总工时**: 36h
 
 ---
 
@@ -729,6 +727,6 @@ src/main/java/burp/waf/
 - **10 个新模板**: 扩展 Payload 类型覆盖
 - **性能优化**: 内存、并发、存储全面优化
 
-总预计工时: **109 小时**
+总预计工时: **103 小时**
 
 建议按照四个阶段逐步实施，每个阶段完成后发布一个版本，确保项目稳定推进。

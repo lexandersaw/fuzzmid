@@ -597,7 +597,19 @@ public class ConfigManager {
         saveConfigToFile();
     }
     
+    public void addPromptType(String type, String name, String template) {
+        promptNames.put(type, name);
+        promptTemplates.put(type, template);
+        saveConfigToFile();
+    }
+    
     public void removePromptTemplate(String type) {
+        promptNames.remove(type);
+        promptTemplates.remove(type);
+        saveConfigToFile();
+    }
+    
+    public void removePromptType(String type) {
         promptNames.remove(type);
         promptTemplates.remove(type);
         saveConfigToFile();
@@ -608,6 +620,21 @@ public class ConfigManager {
             promptTemplates.put(type, template);
             saveConfigToFile();
         }
+    }
+    
+    public void updatePromptType(String type, String name, String template) {
+        promptNames.put(type, name);
+        promptTemplates.put(type, template);
+        saveConfigToFile();
+    }
+    
+    public java.util.Set<String> getPromptTypes() {
+        return promptTemplates.keySet();
+    }
+    
+    public void setPromptTemplate(String type, String template) {
+        promptTemplates.put(type, template);
+        saveConfigToFile();
     }
     
     public boolean hasApiKey() {

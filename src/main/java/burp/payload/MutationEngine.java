@@ -191,8 +191,8 @@ public class MutationEngine {
     
     private boolean isTypeSpecificRule(MutationRule rule) {
         MutationRule.Type type = rule.getType();
-        return type == MutationRule.Type.SQL_QUOTE_REPLACE ||
-               type == MutationRule.Type.SQL_LOGIC_EQUIV ||
+        return type == MutationRule.Type.CHAR_REPLACE ||
+               type == MutationRule.Type.LOGIC_EQUIV ||
                type == MutationRule.Type.XSS_EVENT_REPLACE;
     }
     

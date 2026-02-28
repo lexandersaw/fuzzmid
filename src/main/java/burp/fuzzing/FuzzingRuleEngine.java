@@ -3,13 +3,8 @@ package burp.fuzzing;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -33,41 +28,78 @@ public class FuzzingRuleEngine {
     }
     
     private void initializeDefaultRules() {
-        addRule(createNumberFuzzingRule("integer_fuzz", "数字型参数Fuzzing") {
-            @Override
-            protected FuzzingContext createContext(FuzzingContext context) {
-                context.setParameter("param_type", "integer");
-                context.setParameter("param_value", "123");
-                return true;
-            }
-        });
+        // 整数型参数规则
+        FuzzingRule integerRule = new FuzzingRule();
+        integerRule.setId("integer_fuzz");
+        integerRule.setName("数字型参数Fuzzing");
+        integerRule.setDescription("针对整数型参数生成常见的测试值");
+        integerRule.setCategory("参数类型");
         
-        addRule(createNumberFuzzingRule("string_fuzz", "字符串参数Fuzzing") {
-            @Override
-            protected FuzzingContext createContext(FuzzingContext context) {
-                context.setParameter("param_type", "string");
-                context.setParameter("param_value", "test");
-                return true;
-            }
-        });
+        RuleCondition intCondition = new RuleCondition("param_type", RuleCondition.Operator.EQUALS, "integer");
+        integerRule.setCondition(intCondition);
         
-        addRule(createNumberFuzzingRule("boolean_fuzz", "布尔型参数Fuzzing") {
-            @Override
-            protected FuzzingContext createContext(FuzzingContext context) {
-                context.setParameter("param_type", "boolean");
-                context.setParameter("param_value", "true");
-                context.setParameter("param_value", "false");
-                return true;
-            }
-        });
+        List<String> intTemplates = new ArrayList<>();
+        intTemplates.add("0");
+        intTemplates.add("1");
+        intTemplates.add("-1");
+        intTemplates.add("1.5");
+        intTemplates.add("999999999");
+        integerRule.setTemplates(intTemplates);
+        addRule(integerRule);
         
-        addRule(createNumberFuzzingRule("json_fuzz", "JSON参数Fuzzing") {
-            @Override
-            protected FuzzingContext createContext(FuzzingContext context) {
-                context.setParameter("param_type", "json");
-                return true;
-            }
-        });
+        // 字符串型参数规则
+        FuzzingRule stringRule = new FuzzingRule();
+        stringRule.setId("string_fuzz");
+        stringRule.setName("字符串参数Fuzzing");
+        stringRule.setDescription("针对字符串型参数生成常见的测试值");
+        stringRule.setCategory("参数类型");
+        
+        RuleCondition strCondition = new RuleCondition("param_type", RuleCondition.Operator.EQUALS, "string");
+        stringRule.setCondition(strCondition);
+        
+        List<String> strTemplates = new ArrayList<>();
+        strTemplates.add("");
+        strTemplates.add("test");
+        strTemplates.add("<script>alert(1)</script>");
+        strTemplates.add("' OR '1'='1");
+        stringRule.setTemplates(strTemplates);
+        addRule(stringRule);
+        
+        // 布尔型参数规则
+        FuzzingRule boolRule = new FuzzingRule();
+        boolRule.setId("boolean_fuzz");
+        boolRule.setName("布尔型参数Fuzzing");
+        boolRule.setDescription("针对布尔型参数生成测试值");
+        boolRule.setCategory("参数类型");
+        
+        RuleCondition boolCondition = new RuleCondition("param_type", RuleCondition.Operator.EQUALS, "boolean");
+        boolRule.setCondition(boolCondition);
+        
+        List<String> boolTemplates = new ArrayList<>();
+        boolTemplates.add("true");
+        boolTemplates.add("false");
+        boolTemplates.add("1");
+        boolTemplates.add("0");
+        boolRule.setTemplates(boolTemplates);
+        addRule(boolRule);
+        
+        // JSON参数规则
+        FuzzingRule jsonRule = new FuzzingRule();
+        jsonRule.setId("json_fuzz");
+        jsonRule.setName("JSON参数Fuzzing");
+        jsonRule.setDescription("针对JSON参数生成测试值");
+        jsonRule.setCategory("参数类型");
+        
+        RuleCondition jsonCondition = new RuleCondition("param_type", RuleCondition.Operator.EQUALS, "json");
+        jsonRule.setCondition(jsonCondition);
+        
+        List<String> jsonTemplates = new ArrayList<>();
+        jsonTemplates.add("{}");
+        jsonTemplates.add("[]");
+        jsonTemplates.add("{\"test\":\"test\"}");
+        jsonTemplates.add("[1,2,3]");
+        jsonRule.setTemplates(jsonTemplates);
+        addRule(jsonRule);
     }
     
     private void loadRules() {
@@ -91,7 +123,7 @@ public class FuzzingRuleEngine {
                 }
             }
         } catch (Exception e) {
-                System.err.println("Failed to load fuzzing rules: " + e.getMessage());
+            System.err.println("Failed to load fuzzing rules: " + e.getMessage());
         }
     }
     
@@ -103,30 +135,22 @@ public class FuzzingRuleEngine {
         rule.setDescription(json.optString("description", ""));
         rule.setEnabled(json.optBoolean("enabled", true));
         rule.setCategory(json.optString("category", ""));
-        rule.setPriority(json.optInt("priority", 0));
         
         JSONObject conditionJson = json.optJSONObject("condition");
         if (conditionJson != null) {
-            RuleCondition condition = new RuleCondition();
-            condition.setField(conditionJson.optString("field", ""));
-            condition.setOperator(RuleCondition.Operator.valueOf(conditionJson.optString("operator", "EQUALS")));
-            condition.setValue(conditionJson.optString("value", ""));
-            rule.setCondition(condition);
+            RuleCondition condition = RuleCondition.fromJson(conditionJson);
+            if (condition != null) {
+                rule.setCondition(condition);
+            }
         }
         
-        JSONArray actionsArray = json.optJSONArray("actions");
-        if (actionsArray != null) {
-            List<RuleAction> actions = new ArrayList<>();
-            for (int i = 0; i < actionsArray.length(); i++) {
-                JSONObject actionJson = actionsArray.getJSONObject(i);
-                RuleAction action = new RuleAction();
-                action.setId(actionJson.optString("id", ""));
-                action.setType(RuleAction.ActionType.valueOf(actionJson.optString("type", "TEMPLATE")));
-                action.setTemplate(actionJson.optString("template", ""));
-                action.setEnabled(actionJson.optBoolean("enabled", true));
-                actions.add(action);
+        JSONArray templatesArray = json.optJSONArray("templates");
+        if (templatesArray != null) {
+            List<String> templates = new ArrayList<>();
+            for (int i = 0; i < templatesArray.length(); i++) {
+                templates.add(templatesArray.optString(i, ""));
             }
-            rule.setActions(actions);
+            rule.setTemplates(templates);
         }
         
         return rule;
@@ -201,12 +225,11 @@ public class FuzzingRuleEngine {
         List<String> allPayloads = new ArrayList<>();
         
         List<FuzzingRule> enabledRules = getEnabledRules();
-        enabledRules.sort((a, b) -> Integer.compare(b.getPriority(), a.getPriority()));
         
         for (FuzzingRule rule : enabledRules) {
-            if (rule.matches(context)) {
-                List<String> rulePayloads = rule.generatePayloads(context);
-                allPayloads.addAll(rulePayloads);
+            RuleCondition condition = rule.getCondition();
+            if (condition != null && condition.evaluate(context)) {
+                allPayloads.addAll(rule.getTemplates());
             }
         }
         
@@ -239,7 +262,7 @@ public class FuzzingRuleEngine {
                 JSONObject ruleJson = rulesArray.getJSONObject(i);
                 FuzzingRule rule = parseRule(ruleJson);
                 if (rule != null) {
-                rules.put(rule.getId(), rule);
+                    rules.put(rule.getId(), rule);
                 }
             }
         }
@@ -248,8 +271,8 @@ public class FuzzingRuleEngine {
     public void exportRules(String filePath) throws IOException {
         JSONArray rulesArray = new JSONArray();
         for (FuzzingRule rule : rules.values()) {
-                rulesArray.put(rule.toJson());
-            }
+            rulesArray.put(rule.toJson());
+        }
         
         JSONObject root = new JSONObject();
         root.put("rules", rulesArray);

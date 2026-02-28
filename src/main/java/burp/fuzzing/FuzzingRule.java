@@ -168,7 +168,4 @@ public class FuzzingRule {
         
         return rule;
     }
-    
-    return null;
-    }
 }

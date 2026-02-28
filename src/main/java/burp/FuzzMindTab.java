@@ -989,4 +989,28 @@ public class FuzzMindTab extends JPanel {
                     "合并成功", JOptionPane.INFORMATION_MESSAGE);
         }
     }
+    
+    // 方法供 BurpExtender 调用
+    public void setSelectedIndex(int index) {
+        if (dictionaryTabbedPane != null && index >= 0 && index < dictionaryTabbedPane.getTabCount()) {
+            dictionaryTabbedPane.setSelectedIndex(index);
+        }
+    }
+    
+    public void setGeneratingState(boolean generating) {
+        if (generateButton != null) {
+            generateButton.setEnabled(!generating);
+            generateButton.setText(generating ? "生成中..." : "生成字典");
+        }
+    }
+    
+    public void updateDictionaryDisplay(String dictName, List<String> payloads) {
+        if (dictionaryTextArea != null && payloads != null) {
+            StringBuilder sb = new StringBuilder();
+            for (String payload : payloads) {
+                sb.append(payload).append("\n");
+            }
+            dictionaryTextArea.setText(sb.toString());
+        }
+    }
 }

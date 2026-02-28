@@ -165,4 +165,32 @@ public class RuleCondition {
                 ", value='" + value + '\'' +
                 '}';
     }
+    
+    public org.json.JSONObject toJson() {
+        org.json.JSONObject json = new org.json.JSONObject();
+        json.put("field", field);
+        json.put("operator", operator != null ? operator.name() : "");
+        json.put("value", value);
+        json.put("caseSensitive", caseSensitive);
+        return json;
+    }
+    
+    public static RuleCondition fromJson(org.json.JSONObject json) {
+        if (json == null) return null;
+        
+        RuleCondition condition = new RuleCondition();
+        condition.setField(json.optString("field", ""));
+        
+        String operatorStr = json.optString("operator", "");
+        try {
+            condition.setOperator(Operator.valueOf(operatorStr));
+        } catch (IllegalArgumentException e) {
+            condition.setOperator(Operator.EQUALS);
+        }
+        
+        condition.setValue(json.optString("value", ""));
+        condition.setCaseSensitive(json.optBoolean("caseSensitive", false));
+        
+        return condition;
+    }
 }

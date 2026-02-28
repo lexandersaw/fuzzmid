@@ -8,6 +8,9 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 public class HistoryManager {
     
     private final String historyDirPath;
@@ -28,28 +31,78 @@ public class HistoryManager {
         public HistoryEntry(String dictionaryName, String promptType, String prompt, 
                            List<String> generatedPayloads, String model, String baseUrl) {
             this.id = UUID.randomUUID().toString().substring(0, 8);
-            this.dictionaryName = dictionaryName;
-            this.promptType = promptType;
-            this.prompt = prompt;
-            this.generatedPayloads = new ArrayList<>(generatedPayloads);
+            this.dictionaryName = dictionaryName != null ? dictionaryName : "";
+            this.promptType = promptType != null ? promptType : "";
+            this.prompt = prompt != null ? prompt : "";
+            this.generatedPayloads = generatedPayloads != null ? new ArrayList<>(generatedPayloads) : new ArrayList<>();
             this.timestamp = System.currentTimeMillis();
-            this.payloadCount = generatedPayloads.size();
-            this.model = model;
-            this.baseUrl = baseUrl;
+            this.payloadCount = this.generatedPayloads.size();
+            this.model = model != null ? model : "";
+            this.baseUrl = baseUrl != null ? baseUrl : "";
         }
         
         public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
         public String getDictionaryName() { return dictionaryName; }
         public String getPromptType() { return promptType; }
         public String getPrompt() { return prompt; }
         public List<String> getGeneratedPayloads() { return generatedPayloads; }
         public long getTimestamp() { return timestamp; }
+        public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
         public int getPayloadCount() { return payloadCount; }
         public String getModel() { return model; }
         public String getBaseUrl() { return baseUrl; }
         
         public String getFormattedTime() {
             return new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(timestamp));
+        }
+        
+        public JSONObject toJson() {
+            JSONObject json = new JSONObject();
+            json.put("id", id);
+            json.put("dictionaryName", dictionaryName);
+            json.put("promptType", promptType);
+            json.put("prompt", prompt);
+            json.put("timestamp", timestamp);
+            json.put("payloadCount", payloadCount);
+            json.put("model", model);
+            json.put("baseUrl", baseUrl);
+            
+            JSONArray payloadsArray = new JSONArray();
+            for (String payload : generatedPayloads) {
+                payloadsArray.put(payload);
+            }
+            json.put("payloads", payloadsArray);
+            
+            return json;
+        }
+        
+        public static HistoryEntry fromJson(JSONObject json) {
+            if (json == null) return null;
+            
+            String id = json.optString("id", "");
+            String dictionaryName = json.optString("dictionaryName", "");
+            String promptType = json.optString("promptType", "");
+            String prompt = json.optString("prompt", "");
+            long timestamp = json.optLong("timestamp", System.currentTimeMillis());
+            String model = json.optString("model", "");
+            String baseUrl = json.optString("baseUrl", "");
+            
+            List<String> payloads = new ArrayList<>();
+            JSONArray payloadsArray = json.optJSONArray("payloads");
+            if (payloadsArray != null) {
+                for (int i = 0; i < payloadsArray.length(); i++) {
+                    String payload = payloadsArray.optString(i, "");
+                    if (!payload.isEmpty()) {
+                        payloads.add(payload);
+                    }
+                }
+            }
+            
+            HistoryEntry entry = new HistoryEntry(dictionaryName, promptType, prompt, payloads, model, baseUrl);
+            entry.setId(id);
+            entry.setTimestamp(timestamp);
+            return entry;
         }
     }
     
@@ -127,31 +180,10 @@ public class HistoryManager {
         try {
             String filePath = historyDirPath + "/" + entry.getId() + ".json";
             
-            StringBuilder json = new StringBuilder();
-            json.append("{\n");
-            json.append("  \"id\": \"").append(entry.getId()).append("\",\n");
-            json.append("  \"dictionaryName\": \"").append(escapeJson(entry.getDictionaryName())).append("\",\n");
-            json.append("  \"promptType\": \"").append(escapeJson(entry.getPromptType())).append("\",\n");
-            json.append("  \"prompt\": \"").append(escapeJson(entry.getPrompt())).append("\",\n");
-            json.append("  \"timestamp\": ").append(entry.getTimestamp()).append(",\n");
-            json.append("  \"payloadCount\": ").append(entry.getPayloadCount()).append(",\n");
-            json.append("  \"model\": \"").append(escapeJson(entry.getModel())).append("\",\n");
-            json.append("  \"baseUrl\": \"").append(escapeJson(entry.getBaseUrl())).append("\",\n");
-            json.append("  \"payloads\": [\n");
+            JSONObject json = entry.toJson();
+            String jsonStr = json.toString(2);
             
-            List<String> payloads = entry.getGeneratedPayloads();
-            for (int i = 0; i < payloads.size(); i++) {
-                json.append("    \"").append(escapeJson(payloads.get(i))).append("\"");
-                if (i < payloads.size() - 1) {
-                    json.append(",");
-                }
-                json.append("\n");
-            }
-            
-            json.append("  ]\n");
-            json.append("}");
-            
-            Files.write(Paths.get(filePath), json.toString().getBytes(StandardCharsets.UTF_8));
+            Files.write(Paths.get(filePath), jsonStr.getBytes(StandardCharsets.UTF_8));
             
         } catch (IOException e) {
             e.printStackTrace();
@@ -177,11 +209,11 @@ public class HistoryManager {
         for (File file : files) {
             try {
                 HistoryEntry entry = parseHistoryFile(file);
-                if (entry != null) {
+                if (entry != null && entry.getId() != null && !entry.getId().isEmpty()) {
                     history.put(entry.getId(), entry);
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                System.err.println("Failed to parse history file: " + file.getName() + " - " + e.getMessage());
             }
         }
         
@@ -196,80 +228,30 @@ public class HistoryManager {
     }
     
     private HistoryEntry parseHistoryFile(File file) throws IOException {
-        String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-        
-        String id = extractJsonString(content, "id");
-        String dictionaryName = extractJsonString(content, "dictionaryName");
-        String promptType = extractJsonString(content, "promptType");
-        String prompt = extractJsonString(content, "prompt");
-        long timestamp = extractJsonLong(content, "timestamp");
-        int payloadCount = extractJsonInt(content, "payloadCount");
-        String model = extractJsonString(content, "model");
-        String baseUrl = extractJsonString(content, "baseUrl");
-        
-        List<String> payloads = extractJsonArray(content, "payloads");
-        
-        HistoryEntry entry = new HistoryEntry(dictionaryName, promptType, prompt, payloads, model, baseUrl);
-        
-        return entry;
-    }
-    
-    private String extractJsonString(String content, String key) {
-        String pattern = "\"" + key + "\"\\s*:\\s*\"([^\"]*)\"";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-        java.util.regex.Matcher m = p.matcher(content);
-        return m.find() ? unescapeJson(m.group(1)) : "";
-    }
-    
-    private long extractJsonLong(String content, String key) {
-        String pattern = "\"" + key + "\"\\s*:\\s*(\\d+)";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-        java.util.regex.Matcher m = p.matcher(content);
-        return m.find() ? Long.parseLong(m.group(1)) : 0;
-    }
-    
-    private int extractJsonInt(String content, String key) {
-        String pattern = "\"" + key + "\"\\s*:\\s*(\\d+)";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
-        java.util.regex.Matcher m = p.matcher(content);
-        return m.find() ? Integer.parseInt(m.group(1)) : 0;
-    }
-    
-    private List<String> extractJsonArray(String content, String key) {
-        List<String> result = new ArrayList<>();
-        
-        String pattern = "\"" + key + "\"\\s*:\\s*\\[([^\\]]*)\\]";
-        java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern, java.util.regex.Pattern.DOTALL);
-        java.util.regex.Matcher m = p.matcher(content);
-        
-        if (m.find()) {
-            String arrayContent = m.group(1);
-            java.util.regex.Pattern itemPattern = java.util.regex.Pattern.compile("\"([^\"]*)\"");
-            java.util.regex.Matcher itemMatcher = itemPattern.matcher(arrayContent);
+        try {
+            String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
             
-            while (itemMatcher.find()) {
-                result.add(unescapeJson(itemMatcher.group(1)));
+            if (content == null || content.trim().isEmpty()) {
+                return null;
             }
+            
+            JSONObject json = new JSONObject(content);
+            return HistoryEntry.fromJson(json);
+            
+        } catch (Exception e) {
+            System.err.println("JSON parse error for file " + file.getName() + ": " + e.getMessage());
+            
+            if (file.exists()) {
+                String backupPath = file.getAbsolutePath() + ".bak";
+                try {
+                    Files.copy(file.toPath(), Paths.get(backupPath));
+                    System.err.println("Backed up corrupted file to: " + backupPath);
+                } catch (IOException ioe) {
+                    System.err.println("Failed to backup corrupted file: " + ioe.getMessage());
+                }
+            }
+            
+            return null;
         }
-        
-        return result;
-    }
-    
-    private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
-    
-    private String unescapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t");
     }
 }

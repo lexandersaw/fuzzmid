@@ -61,8 +61,9 @@ public class FuzzMindTab extends JPanel {
     private JComboBox<String> vulnTypeCombo;
     private JTextField targetParamField;
     
-    private boolean isGenerating = false;
-    private StringBuilder streamBuffer;
+    private volatile boolean isGenerating = false;
+    private final Object generateLock = new Object();
+    private Thread currentGenerateThread;
     
     public FuzzMindTab(IBurpExtenderCallbacks callbacks, DictionaryManager dictionaryManager, ConfigManager configManager) {
         this.callbacks = callbacks;
@@ -575,6 +576,19 @@ public class FuzzMindTab extends JPanel {
     }
     
     private void generateDictionary() {
+        synchronized (generateLock) {
+            if (isGenerating) {
+                int result = JOptionPane.showConfirmDialog(this,
+                        "当前正在生成中，是否取消当前生成任务？",
+                        "确认",
+                        JOptionPane.YES_NO_OPTION);
+                if (result == JOptionPane.YES_OPTION) {
+                    cancelGeneration();
+                }
+                return;
+            }
+        }
+        
         String selectedType = promptTypeList.getSelectedValue();
         String prompt = promptTextArea.getText();
         
@@ -583,7 +597,7 @@ public class FuzzMindTab extends JPanel {
             return;
         }
         
-        configManager.setPromptTemplate(selectedType, prompt);
+        configManager.updatePromptTemplate(selectedType, prompt);
         
         String apiKey = configManager.getConfig(ConfigManager.API_KEY);
         if (apiKey == null || apiKey.trim().isEmpty()) {
@@ -603,9 +617,11 @@ public class FuzzMindTab extends JPanel {
             }
         }
         
+        synchronized (generateLock) {
+            isGenerating = true;
+        }
         generateButton.setEnabled(false);
         generateButton.setText("生成中...");
-        isGenerating = true;
         dictionaryTextArea.setText("");
         
         if (streamModeCheck.isSelected()) {
@@ -615,10 +631,28 @@ public class FuzzMindTab extends JPanel {
         }
     }
     
+    private void cancelGeneration() {
+        synchronized (generateLock) {
+            if (currentGenerateThread != null && currentGenerateThread.isAlive()) {
+                currentGenerateThread.interrupt();
+            }
+            isGenerating = false;
+        }
+        SwingUtilities.invokeLater(() -> {
+            generateButton.setText("生成字典");
+            generateButton.setEnabled(true);
+        });
+    }
+    
     private void generateDictionaryNormal(String selectedType, String prompt) {
-        new Thread(() -> {
+        currentGenerateThread = new Thread(() -> {
+            final StringBuilder localBuffer = new StringBuilder();
             try {
                 final List<String> generatedPayloads = aiGenerator.generateDictionary(selectedType, prompt);
+                
+                if (Thread.currentThread().isInterrupted()) {
+                    return;
+                }
                 
                 SwingUtilities.invokeLater(() -> {
                     StringBuilder sb = new StringBuilder();
@@ -630,9 +664,11 @@ public class FuzzMindTab extends JPanel {
                     dictionaryManager.updateDictionary(selectedType, generatedPayloads);
                     updateStatistics(selectedType);
                     
+                    synchronized (generateLock) {
+                        isGenerating = false;
+                    }
                     generateButton.setText("生成字典");
                     generateButton.setEnabled(true);
-                    isGenerating = false;
                     
                     historyPanel.refresh();
                     
@@ -642,63 +678,91 @@ public class FuzzMindTab extends JPanel {
                             "FuzzMind", JOptionPane.INFORMATION_MESSAGE);
                 });
             } catch (final Exception e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    return;
+                }
                 SwingUtilities.invokeLater(() -> {
+                    synchronized (generateLock) {
+                        isGenerating = false;
+                    }
                     generateButton.setText("生成字典");
                     generateButton.setEnabled(true);
-                    isGenerating = false;
                     JOptionPane.showMessageDialog(FuzzMindTab.this,
                             "生成失败：" + e.getMessage(),
                             "错误", JOptionPane.ERROR_MESSAGE);
                 });
             }
-        }).start();
+        });
+        currentGenerateThread.start();
     }
     
     private void generateDictionaryStream(String selectedType, String prompt) {
-        streamBuffer = new StringBuilder();
+        final StringBuilder localBuffer = new StringBuilder();
         
-        aiGenerator.generateDictionaryStream(selectedType, prompt,
-            chunk -> SwingUtilities.invokeLater(() -> {
-                streamBuffer.append(chunk);
-                String displayText = streamBuffer.toString();
-                StringBuilder formatted = new StringBuilder();
-                for (String line : displayText.strip().split("\n")) {
-                    line = line.strip();
-                    if (!line.isEmpty() && !line.startsWith("#") && !line.startsWith("```")) {
-                        if (line.matches("^\\d+\\.\\s.*")) {
-                            line = line.replaceFirst("^\\d+\\.\\s+", "");
-                        }
-                        formatted.append(line).append("\n");
+        currentGenerateThread = new Thread(() -> {
+            aiGenerator.generateDictionaryStream(selectedType, prompt,
+                chunk -> {
+                    if (Thread.currentThread().isInterrupted()) {
+                        return;
                     }
+                    SwingUtilities.invokeLater(() -> {
+                        localBuffer.append(chunk);
+                        String displayText = localBuffer.toString();
+                        StringBuilder formatted = new StringBuilder();
+                        for (String line : displayText.strip().split("\n")) {
+                            line = line.strip();
+                            if (!line.isEmpty() && !line.startsWith("#") && !line.startsWith("```")) {
+                                if (line.matches("^\\d+\\.\\s.*")) {
+                                    line = line.replaceFirst("^\\d+\\.\\s+", "");
+                                }
+                                formatted.append(line).append("\n");
+                            }
+                        }
+                        dictionaryTextArea.setText(formatted.toString());
+                    });
+                },
+                () -> {
+                    if (Thread.currentThread().isInterrupted()) {
+                        return;
+                    }
+                    SwingUtilities.invokeLater(() -> {
+                        String text = localBuffer.toString();
+                        List<String> payloads = processGeneratedText(text);
+                        
+                        dictionaryManager.updateDictionary(selectedType, payloads);
+                        updateStatistics(selectedType);
+                        
+                        synchronized (generateLock) {
+                            isGenerating = false;
+                        }
+                        generateButton.setText("生成字典");
+                        generateButton.setEnabled(true);
+                        
+                        historyPanel.refresh();
+                        
+                        JOptionPane.showMessageDialog(FuzzMindTab.this,
+                                "字典生成完成！\n生成了 " + payloads.size() + " 个条目",
+                                "FuzzMind", JOptionPane.INFORMATION_MESSAGE);
+                    });
+                },
+                error -> {
+                    if (Thread.currentThread().isInterrupted()) {
+                        return;
+                    }
+                    SwingUtilities.invokeLater(() -> {
+                        synchronized (generateLock) {
+                            isGenerating = false;
+                        }
+                        generateButton.setText("生成字典");
+                        generateButton.setEnabled(true);
+                        JOptionPane.showMessageDialog(FuzzMindTab.this,
+                                "生成失败：" + error.getMessage(),
+                                "错误", JOptionPane.ERROR_MESSAGE);
+                    });
                 }
-                dictionaryTextArea.setText(formatted.toString());
-            }),
-            () -> SwingUtilities.invokeLater(() -> {
-                String text = streamBuffer.toString();
-                List<String> payloads = processGeneratedText(text);
-                
-                dictionaryManager.updateDictionary(selectedType, payloads);
-                updateStatistics(selectedType);
-                
-                generateButton.setText("生成字典");
-                generateButton.setEnabled(true);
-                isGenerating = false;
-                
-                historyPanel.refresh();
-                
-                JOptionPane.showMessageDialog(FuzzMindTab.this,
-                        "字典生成完成！\n生成了 " + payloads.size() + " 个条目",
-                        "FuzzMind", JOptionPane.INFORMATION_MESSAGE);
-            }),
-            error -> SwingUtilities.invokeLater(() -> {
-                generateButton.setText("生成字典");
-                generateButton.setEnabled(true);
-                isGenerating = false;
-                JOptionPane.showMessageDialog(FuzzMindTab.this,
-                        "生成失败：" + error.getMessage(),
-                        "错误", JOptionPane.ERROR_MESSAGE);
-            })
-        );
+            );
+        });
+        currentGenerateThread.start();
     }
     
     private List<String> processGeneratedText(String text) {

@@ -4,12 +4,20 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
+import burp.ai.AIResponseCache;
 import burp.dictionary.HistoryManager;
+import burp.payload.PayloadMutator;
 import burp.payload.PayloadTransformer;
+import burp.payload.PayloadEvaluator;
 import burp.ui.TransformConfigPanel;
 import burp.util.ContextAnalyzer;
 import burp.util.ContextAnalyzer.RequestContext;
+import burp.waf.WAFDetector;
+import burp.waf.WAFSignature;
+import burp.util.vuln.VulnerabilityPatternMatcher;
+import burp.util.vuln.VulnerabilityPatternMatcher.MatchResult;
 
 public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFactory, ITab, IContextMenuFactory {
 
@@ -19,6 +27,10 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
     private DictionaryManager dictionaryManager;
     private ConfigManager configManager;
     private AIGenerator aiGenerator;
+    private WAFDetector wafDetector;
+    private PayloadMutator payloadMutator;
+    private VulnerabilityPatternMatcher vulnMatcher;
+    private AIResponseCache aiCache;
 
     @Override
     public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
@@ -31,6 +43,11 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
         this.dictionaryManager = new DictionaryManager();
         this.aiGenerator = new AIGenerator(configManager, callbacks);
         this.aiGenerator.setHistoryManager(dictionaryManager.getHistoryManager());
+        
+        this.wafDetector = new WAFDetector();
+        this.payloadMutator = new PayloadMutator();
+        this.vulnMatcher = new VulnerabilityPatternMatcher();
+        this.aiCache = new AIResponseCache(true, 100, 24);
 
         initializeDefaultDictionaries();
         
@@ -45,7 +62,7 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
         callbacks.registerContextMenuFactory(this);
 
         callbacks.printOutput("----------------------------------------");
-        callbacks.printOutput("FuzzMind 字典管理器已加载!");
+        callbacks.printOutput("FuzzMind v3.0 字典管理器已加载!");
         callbacks.printOutput("----------------------------------------");
         callbacks.printOutput("使用说明:");
         callbacks.printOutput("1. 在左侧选择提示词类型，可以添加、编辑或删除提示词类型");
@@ -58,15 +75,16 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
         callbacks.printOutput("8. 在「历史记录」标签页可以查看生成历史");
         callbacks.printOutput("9. 配置文件和字典存储位置：~/.config/fuzzMind/");
         callbacks.printOutput("----------------------------------------");
-        callbacks.printOutput("新功能:");
-        callbacks.printOutput("- 流式输出: 实时显示生成进度");
-        callbacks.printOutput("- Payload变换: URL/Base64/HTML编码, 大小写变换, 前后缀追加");
-        callbacks.printOutput("- 字典统计: 查看条目数量、长度分布等统计信息");
-        callbacks.printOutput("- 搜索过滤: 在字典中快速搜索");
-        callbacks.printOutput("- 导入导出: 支持外部字典文件导入导出");
-        callbacks.printOutput("- 字典合并: 多个字典合并去重");
-        callbacks.printOutput("- 历史记录: 保存生成历史，可回溯使用");
-        callbacks.printOutput("- API重试: 请求失败自动重试");
+        callbacks.printOutput("v3.0 新功能:");
+        callbacks.printOutput("- AI响应缓存: 避免重复请求，节省API调用成本");
+        callbacks.printOutput("- 智能Payload变异: 13种变异策略自动生成变体");
+        callbacks.printOutput("- WAF指纹识别: 自动识别12种WAF类型");
+        callbacks.printOutput("- 漏洞模式匹配: 10种漏洞模式自动检测");
+        callbacks.printOutput("- 深度技术栈识别: 覆盖更多框架和中间件");
+        callbacks.printOutput("- Payload有效性评估: 为Payload添加评分");
+        callbacks.printOutput("- Fuzzing规则引擎: 可配置的Fuzzing规则");
+        callbacks.printOutput("- 字典标签系统: 标签分类管理");
+        callbacks.printOutput("- 10个新Payload模板: GraphQL/JWT/SSTI等");
         callbacks.printOutput("----------------------------------------");
         callbacks.printOutput("https://github.com/Conan924/AIPentestKit/blob/main/FuzzMind");
         callbacks.printOutput("----------------------------------------");
@@ -123,26 +141,41 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
 
             IHttpRequestResponse[] messages = invocation.getSelectedMessages();
             if (messages != null && messages.length > 0) {
-                // 生成上下文感知 Payload
                 JMenuItem generatePayloadItem = new JMenuItem("FuzzMind: 生成上下文感知 Payload");
                 generatePayloadItem.addActionListener(e -> {
                     showContextPayloadDialog(messages[0]);
                 });
                 menuItems.add(generatePayloadItem);
 
-                // 分析请求上下文
                 JMenuItem analyzeContextItem = new JMenuItem("FuzzMind: 分析请求上下文");
                 analyzeContextItem.addActionListener(e -> {
                     showContextAnalysisDialog(messages[0]);
                 });
                 menuItems.add(analyzeContextItem);
 
-                // WAF 绕过变体
                 JMenuItem wafBypassItem = new JMenuItem("FuzzMind: 生成 WAF 绕过变体");
                 wafBypassItem.addActionListener(e -> {
                     showWafBypassDialog(messages[0]);
                 });
                 menuItems.add(wafBypassItem);
+
+                JMenuItem wafDetectItem = new JMenuItem("FuzzMind: 检测 WAF 类型");
+                wafDetectItem.addActionListener(e -> {
+                    showWAFDetectionDialog(messages[0]);
+                });
+                menuItems.add(wafDetectItem);
+
+                JMenuItem vulnMatchItem = new JMenuItem("FuzzMind: 漏洞模式匹配分析");
+                vulnMatchItem.addActionListener(e -> {
+                    showVulnPatternDialog(messages[0]);
+                });
+                menuItems.add(vulnMatchItem);
+
+                JMenuItem mutatePayloadItem = new JMenuItem("FuzzMind: 智能 Payload 变异");
+                mutatePayloadItem.addActionListener(e -> {
+                    showPayloadMutationDialog(messages[0]);
+                });
+                menuItems.add(mutatePayloadItem);
             }
         }
 
@@ -520,6 +553,190 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
                     JOptionPane.ERROR_MESSAGE);
             callbacks.printError("FuzzMind Error: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    private void showWAFDetectionDialog(IHttpRequestResponse message) {
+        ContextAnalyzer contextAnalyzer = new ContextAnalyzer(helpers);
+        RequestContext context = contextAnalyzer.analyzeRequest(message);
+        
+        Map<String, String> headers = new java.util.LinkedHashMap<>();
+        if (context.getServerHeader() != null) {
+            headers.put("Server", context.getServerHeader());
+        }
+        if (context.getPoweredBy() != null) {
+            headers.put("X-Powered-By", context.getPoweredBy());
+        }
+        
+        String responseBody = context.getResponseBody() != null ? context.getResponseBody() : "";
+        
+        List<WAFSignature.DetectionResult> results = wafDetector.detectAll(headers, responseBody, 200);
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== FuzzMind WAF 检测结果 ===\n\n");
+        
+        if (results.isEmpty()) {
+            sb.append("未检测到 WAF\n");
+            sb.append("\n建议:\n");
+            sb.append("  - 可能没有 WAF 保护\n");
+            sb.append("  - 或使用自定义/未知 WAF\n");
+        } else {
+            sb.append("检测到以下 WAF:\n\n");
+            for (WAFSignature.DetectionResult result : results) {
+                sb.append("【").append(result.getName()).append("】\n");
+                sb.append("  厂商: ").append(result.getVendor()).append("\n");
+                sb.append("  类型: ").append(result.getType()).append("\n");
+                sb.append("  置信度: ").append(result.getScore()).append("%\n");
+                sb.append("  推荐绕过技术:\n");
+                for (String technique : result.getBypassTechniques()) {
+                    sb.append("    - ").append(technique).append("\n");
+                }
+                sb.append("\n");
+            }
+        }
+        
+        sb.append("【通用绕过技术】\n");
+        List<String> allTechniques = wafDetector.getAllBypassTechniques();
+        for (String tech : allTechniques) {
+            sb.append("  - ").append(tech).append("\n");
+        }
+        
+        JTextArea textArea = new JTextArea(sb.toString());
+        textArea.setEditable(false);
+        textArea.setRows(20);
+        textArea.setColumns(50);
+        
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        JOptionPane.showMessageDialog(null, scrollPane, "FuzzMind - WAF 检测结果", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void showVulnPatternDialog(IHttpRequestResponse message) {
+        ContextAnalyzer contextAnalyzer = new ContextAnalyzer(helpers);
+        RequestContext requestContext = contextAnalyzer.analyzeRequest(message);
+        
+        burp.util.vuln.VulnerabilityContext vulnContext = new burp.util.vuln.VulnerabilityContext();
+        vulnContext.setMethod(requestContext.getMethod());
+        vulnContext.setPath(requestContext.getPath());
+        vulnContext.setContentType(requestContext.getContentType());
+        vulnContext.setRequestBody(requestContext.getRequestBody());
+        vulnContext.setResponseBody(requestContext.getResponseBody());
+        vulnContext.setParameters(requestContext.getParameters());
+        
+        if (requestContext.getTechnologies() != null) {
+            vulnContext.setTechnologies(new java.util.ArrayList<>(requestContext.getTechnologies()));
+        }
+        
+        List<MatchResult> results = vulnMatcher.match(vulnContext);
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== FuzzMind 漏洞模式匹配结果 ===\n\n");
+        
+        if (results.isEmpty()) {
+            sb.append("未匹配到已知漏洞模式\n");
+            sb.append("\n建议:\n");
+            sb.append("  - 手动检查业务逻辑漏洞\n");
+            sb.append("  - 测试认证和授权绕过\n");
+            sb.append("  - 检查敏感信息泄露\n");
+        } else {
+            sb.append("匹配到以下漏洞模式:\n\n");
+            for (MatchResult result : results) {
+                sb.append("【").append(result.getPatternName()).append("】\n");
+                sb.append("  类别: ").append(result.getCategory()).append("\n");
+                sb.append("  严重程度: ").append(result.getSeverityLevel()).append(" (").append(result.getSeverity()).append("/5)\n");
+                sb.append("  修复建议:\n");
+                for (String suggestion : result.getSuggestions()) {
+                    sb.append("    - ").append(suggestion).append("\n");
+                }
+                sb.append("\n");
+            }
+        }
+        
+        JTextArea textArea = new JTextArea(sb.toString());
+        textArea.setEditable(false);
+        textArea.setRows(20);
+        textArea.setColumns(50);
+        
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        JOptionPane.showMessageDialog(null, scrollPane, "FuzzMind - 漏洞模式匹配", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void showPayloadMutationDialog(IHttpRequestResponse message) {
+        ContextAnalyzer contextAnalyzer = new ContextAnalyzer(helpers);
+        RequestContext context = contextAnalyzer.analyzeRequest(message);
+        String suggestedVulnType = contextAnalyzer.suggestVulnType(context);
+        
+        JPanel panel = new JPanel(new GridLayout(0, 1));
+        
+        JPanel payloadPanel = new JPanel(new BorderLayout());
+        payloadPanel.add(new JLabel("原始 Payload (每行一个): "), BorderLayout.NORTH);
+        JTextArea payloadArea = new JTextArea(8, 40);
+        payloadArea.setLineWrap(true);
+        payloadArea.setText("' OR 1=1--\n' UNION SELECT NULL--\n1' AND '1'='1");
+        payloadPanel.add(new JScrollPane(payloadArea), BorderLayout.CENTER);
+        panel.add(payloadPanel);
+        
+        JPanel depthPanel = new JPanel(new BorderLayout());
+        depthPanel.add(new JLabel("变异深度 (1-3): "), BorderLayout.WEST);
+        JSpinner depthSpinner = new JSpinner(new SpinnerNumberModel(1, 1, 3, 1));
+        depthPanel.add(depthSpinner, BorderLayout.CENTER);
+        panel.add(depthPanel);
+        
+        JPanel rulePanel = new JPanel(new BorderLayout());
+        rulePanel.add(new JLabel("启用规则: "), BorderLayout.NORTH);
+        
+        java.util.List<String> ruleNames = payloadMutator.getRuleNames();
+        java.util.List<JCheckBox> ruleCheckBoxes = new java.util.ArrayList<>();
+        JPanel rulesContainer = new JPanel();
+        rulesContainer.setLayout(new BoxLayout(rulesContainer, BoxLayout.Y_AXIS));
+        
+        for (String ruleName : ruleNames) {
+            JCheckBox checkBox = new JCheckBox(ruleName);
+            checkBox.setSelected(true);
+            ruleCheckBoxes.add(checkBox);
+            rulesContainer.add(checkBox);
+        }
+        
+        JScrollPane rulesScroll = new JScrollPane(rulesContainer);
+        rulesScroll.setPreferredSize(new Dimension(400, 150));
+        rulePanel.add(rulesScroll, BorderLayout.CENTER);
+        panel.add(rulePanel);
+        
+        JPanel infoPanel = new JPanel(new BorderLayout());
+        infoPanel.add(new JLabel("建议漏洞类型: " + suggestedVulnType), BorderLayout.WEST);
+        panel.add(infoPanel);
+        
+        int result = JOptionPane.showConfirmDialog(null, panel, "FuzzMind - 智能 Payload 变异",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        
+        if (result == JOptionPane.OK_OPTION) {
+            String payloadText = payloadArea.getText().trim();
+            int depth = (Integer) depthSpinner.getValue();
+            
+            for (int i = 0; i < ruleNames.size(); i++) {
+                payloadMutator.setRuleEnabled(ruleNames.get(i), ruleCheckBoxes.get(i).isSelected());
+            }
+            
+            List<String> originalPayloads = new java.util.ArrayList<>();
+            for (String line : payloadText.split("\n")) {
+                if (!line.trim().isEmpty()) {
+                    originalPayloads.add(line.trim());
+                }
+            }
+            
+            List<String> mutatedPayloads = payloadMutator.mutateList(originalPayloads, depth);
+            
+            String dictName = "mutated_" + System.currentTimeMillis();
+            dictionaryManager.addDictionary(dictName, mutatedPayloads);
+            fuzzMindTab.updateDictionaryDisplay(dictName, mutatedPayloads);
+            
+            JOptionPane.showMessageDialog(null,
+                    "已生成 " + mutatedPayloads.size() + " 个变异 Payload！\n" +
+                    "原始 Payload 数量: " + originalPayloads.size() + "\n" +
+                    "变异深度: " + depth + "\n" +
+                    "字典名称: " + dictName + "\n" +
+                    "点击「使用该字典」后在 Intruder 中使用。",
+                    "FuzzMind 提示",
+                    JOptionPane.INFORMATION_MESSAGE);
         }
     }
 }

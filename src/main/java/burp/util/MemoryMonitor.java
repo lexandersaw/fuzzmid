@@ -10,6 +10,8 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 
+import burp.AppConfig;
+
 public class MemoryMonitor {
     
     private static final MemoryMonitor INSTANCE = new MemoryMonitor();
@@ -26,8 +28,8 @@ public class MemoryMonitor {
         this.memoryBean = ManagementFactory.getMemoryMXBean();
         this.trackers = new ConcurrentHashMap<>();
         this.warningListeners = new ArrayList<>();
-        this.warningThresholdBytes = 100 * 1024 * 1024; // 100MB
-        this.warningThresholdPercent = 0.85; // 85%
+        this.warningThresholdBytes = AppConfig.MEMORY_WARNING_THRESHOLD;
+        this.warningThresholdPercent = 0.85;
         this.monitoring = false;
     }
     
@@ -72,9 +74,9 @@ public class MemoryMonitor {
             for (MemoryWarningListener listener : warningListeners) {
                 try {
                     listener.onMemoryWarning(warning);
-                } catch (Exception e) {
-                    // Ignore listener errors
-                }
+            } catch (Exception e) {
+                System.err.println("Memory warning listener error: " + e.getMessage());
+            }
             }
         }
     }

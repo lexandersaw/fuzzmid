@@ -700,7 +700,6 @@ src/main/java/burp/
 | 问题 | 文件 | 描述 | 状态 |
 |------|------|------|------|
 | 配置文件权限 | ConfigManager.java | 创建配置目录时未设置适当权限 | **已修复** |
-| 缓存文件明文存储 | AIResponseCache.java | 缓存文件以明文存储敏感数据 | 待修复 |
 | 正则表达式 DoS | WAFSignature.java | 每次匹配重新编译正则，可能触发 ReDoS | **已修复** |
 | 资源泄漏 | OpenAICompatibleProvider.java | getErrorStream() 可能返回 null 导致 NPE | **已修复** |
 

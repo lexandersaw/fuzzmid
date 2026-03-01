@@ -8,6 +8,9 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -23,9 +26,23 @@ public class OpenAICompatibleProvider implements AIProvider {
     private static final int DEFAULT_TIMEOUT = 60000;
     private static final int MAX_RETRIES = 3;
     private static final int RETRY_DELAY_MS = 1000;
+    private static final int THREAD_POOL_SIZE = 10;
+    
+    private final ExecutorService executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
     
     public OpenAICompatibleProvider(ConfigManager configManager) {
         this.configManager = configManager;
+    }
+    
+    public void shutdown() {
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+        }
     }
     
     @Override
@@ -81,7 +98,7 @@ public class OpenAICompatibleProvider implements AIProvider {
                                Consumer<String> onChunk,
                                Runnable onComplete,
                                Consumer<Exception> onError) {
-        new Thread(() -> {
+        executorService.submit(() -> {
             try {
                 if (!isConfigured()) {
                     onError.accept(new Exception("API密钥未配置，请先配置API密钥"));
@@ -145,7 +162,7 @@ public class OpenAICompatibleProvider implements AIProvider {
             } catch (Exception e) {
                 onError.accept(e);
             }
-        }).start();
+        });
     }
     
     private JSONObject buildRequestJson(String systemPrompt, String userPrompt, String model, boolean stream) {
@@ -205,8 +222,12 @@ public class OpenAICompatibleProvider implements AIProvider {
     }
     
     private String readErrorResponse(HttpURLConnection connection) throws Exception {
+        java.io.InputStream errorStream = connection.getErrorStream();
+        if (errorStream == null) {
+            return "";
+        }
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(connection.getErrorStream(), StandardCharsets.UTF_8))) {
+                new InputStreamReader(errorStream, StandardCharsets.UTF_8))) {
             StringBuilder response = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {

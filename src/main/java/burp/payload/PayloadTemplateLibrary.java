@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,11 +24,12 @@ public class PayloadTemplateLibrary {
     private final Map<String, PayloadTemplate> templates;
     private final Map<String, String> globalVariables;
     private final Map<String, List<PayloadTemplate>> templatesByCategory;
+    private final Object templateLock = new Object();
     
     public PayloadTemplateLibrary() {
-        this.templates = new LinkedHashMap<>();
-        this.globalVariables = new HashMap<>();
-        this.templatesByCategory = new LinkedHashMap<>();
+        this.templates = new ConcurrentHashMap<>();
+        this.globalVariables = new ConcurrentHashMap<>();
+        this.templatesByCategory = new ConcurrentHashMap<>();
         
         initializeDefaultVariables();
         initializeDefaultTemplates();

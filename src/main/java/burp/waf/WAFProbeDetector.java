@@ -26,6 +26,9 @@ public class WAFProbeDetector {
     private static final int PROBE_TIMEOUT_MS = 10000;
     private static final int MAX_CONCURRENT_PROBES = 3;
     
+    private static final Pattern QUERY_PATTERN = Pattern.compile("(\\?[^\\s]*)");
+    private static final Pattern PATH_PATTERN = Pattern.compile("^([A-Z]+\\s+[^\\s]+)");
+    
     public WAFProbeDetector(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
         this.helpers = callbacks.getHelpers();
@@ -505,21 +508,18 @@ public class WAFProbeDetector {
     }
     
     private String injectPayload(String request, String parameter, String payload) {
-        String encodedPayload = payload;
-        
         Pattern paramPattern = Pattern.compile("(" + Pattern.quote(parameter) + "=)([^&\\s]*)");
         Matcher matcher = paramPattern.matcher(request);
         
         if (matcher.find()) {
-            return matcher.replaceFirst("$1" + encodedPayload);
+            return matcher.replaceFirst("$1" + payload);
         }
         
         return appendProbeToQuery(request, payload);
     }
     
     private String appendProbeToQuery(String request, String payload) {
-        Pattern queryPattern = Pattern.compile("(\\?[^\s]*)");
-        Matcher matcher = queryPattern.matcher(request);
+        Matcher matcher = QUERY_PATTERN.matcher(request);
         
         if (matcher.find()) {
             String query = matcher.group(1);
@@ -527,8 +527,7 @@ public class WAFProbeDetector {
             return request.replace(query, query + separator + "probe=" + payload);
         }
         
-        Pattern pathPattern = Pattern.compile("^([A-Z]+\\s+[^\\s]+)");
-        Matcher pathMatcher = pathPattern.matcher(request);
+        Matcher pathMatcher = PATH_PATTERN.matcher(request);
         if (pathMatcher.find()) {
             String path = pathMatcher.group(1);
             return request.replace(path, path + "?probe=" + payload);

@@ -28,10 +28,6 @@ public class AttackChain {
         this.endTime = 0;
     }
     
-    public enum AttackChainStatus {
-        PENDING, RUNNING, PAUSED, COMPLETED, FAILED, CANCELLED
-    }
-    
     public String getId() {
         return id;
     }

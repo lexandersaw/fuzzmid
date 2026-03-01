@@ -2,6 +2,7 @@ package burp.attackchain;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,7 +24,7 @@ public class AttackChainBuilder {
         this.callbacks = callbacks;
         this.helpers = callbacks.getHelpers();
         this.chainTemplates = new LinkedHashMap<>();
-        this.activeChains = new ArrayList<>();
+        this.activeChains = new CopyOnWriteArrayList<>();
         
         initializeDefaultTemplates();
     }

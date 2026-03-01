@@ -18,6 +18,11 @@ import burp.waf.WAFDetector;
 import burp.waf.WAFSignature;
 import burp.util.vuln.VulnerabilityPatternMatcher;
 import burp.util.vuln.VulnerabilityPatternMatcher.MatchResult;
+import burp.workflow.WorkflowEngine;
+import burp.workflow.WorkflowResult;
+import burp.workflow.WorkflowContext;
+import burp.workflow.WorkflowEngine;
+import burp.workflow.WorkflowResult;
 
 public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFactory, ITab, IContextMenuFactory {
 
@@ -31,6 +36,7 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
     private PayloadMutator payloadMutator;
     private VulnerabilityPatternMatcher vulnMatcher;
     private AIResponseCache aiCache;
+    private WorkflowEngine workflowEngine;
 
     @Override
     public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
@@ -48,6 +54,7 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
         this.payloadMutator = new PayloadMutator();
         this.vulnMatcher = new VulnerabilityPatternMatcher();
         this.aiCache = new AIResponseCache(true, 100, 24);
+        this.workflowEngine = new WorkflowEngine(callbacks, aiGenerator, dictionaryManager, configManager);
 
         initializeDefaultDictionaries();
         

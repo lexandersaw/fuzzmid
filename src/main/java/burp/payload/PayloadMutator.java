@@ -1,8 +1,12 @@
 package burp.payload;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
+
+import burp.AppConfig;
 
 public class PayloadMutator {
     
@@ -15,7 +19,7 @@ public class PayloadMutator {
         this.rules = new ArrayList<>();
         this.random = new Random();
         this.maxDepth = 2;
-        this.maxVariants = 1000;
+        this.maxVariants = AppConfig.MAX_PAYLOAD_VARIANTS;
         
         initializeDefaultRules();
     }
@@ -23,8 +27,8 @@ public class PayloadMutator {
     public PayloadMutator(int maxDepth, int maxVariants) {
         this.rules = new ArrayList<>();
         this.random = new Random();
-        this.maxDepth = maxDepth;
-        this.maxVariants = maxVariants;
+        this.maxDepth = Math.min(maxDepth, AppConfig.MAX_MUTATION_DEPTH);
+        this.maxVariants = Math.min(maxVariants, AppConfig.MAX_PAYLOAD_VARIANTS);
         
         initializeDefaultRules();
     }
@@ -219,38 +223,37 @@ public class PayloadMutator {
     }
     
     public List<String> mutate(String payload, int depth) {
-        List<String> variants = new ArrayList<>();
-        variants.add(payload);
+        Set<String> variantSet = new LinkedHashSet<>();
+        variantSet.add(payload);
         
         if (depth <= 0 || depth > maxDepth) {
-            return variants;
+            return new ArrayList<>(variantSet);
         }
         
         for (MutationRule rule : rules) {
             if (rule.isEnabled()) {
                 try {
                     String mutated = rule.apply(payload);
-                    if (!mutated.equals(payload) && !variants.contains(mutated)) {
-                        variants.add(mutated);
+                    if (!mutated.equals(payload)) {
+                        variantSet.add(mutated);
                         
-                        if (variants.size() >= maxVariants) {
-                            return variants;
+                        if (variantSet.size() >= maxVariants) {
+                            return new ArrayList<>(variantSet);
                         }
                     }
                 } catch (Exception e) {
-                    // 忽略变异失败的情况
                 }
             }
         }
         
-        return variants;
+        return new ArrayList<>(variantSet);
     }
     
     public List<String> mutateDeep(String payload, int depth) {
-        List<String> result = new ArrayList<>();
+        Set<String> resultSet = new LinkedHashSet<>();
         List<String> currentLevel = new ArrayList<>();
         currentLevel.add(payload);
-        result.add(payload);
+        resultSet.add(payload);
         
         for (int i = 0; i < depth && i < maxDepth; i++) {
             List<String> nextLevel = new ArrayList<>();
@@ -260,16 +263,15 @@ public class PayloadMutator {
                     if (rule.isEnabled()) {
                         try {
                             String mutated = rule.apply(currentPayload);
-                            if (!mutated.equals(currentPayload) && !result.contains(mutated)) {
+                            if (!mutated.equals(currentPayload) && !resultSet.contains(mutated)) {
                                 nextLevel.add(mutated);
-                                result.add(mutated);
+                                resultSet.add(mutated);
                                 
-                                if (result.size() >= maxVariants) {
-                                    return result;
+                                if (resultSet.size() >= maxVariants) {
+                                    return new ArrayList<>(resultSet);
                                 }
                             }
                         } catch (Exception e) {
-                            // 忽略变异失败的情况
                         }
                     }
                 }
@@ -281,21 +283,22 @@ public class PayloadMutator {
             }
         }
         
-        return result;
+        return new ArrayList<>(resultSet);
     }
     
     public List<String> mutateList(List<String> payloads, int depth) {
-        List<String> result = new ArrayList<>();
+        Set<String> resultSet = new LinkedHashSet<>();
         
         for (String payload : payloads) {
             List<String> variants = mutateDeep(payload, depth);
-            result.addAll(variants);
+            resultSet.addAll(variants);
             
-            if (result.size() >= maxVariants) {
+            if (resultSet.size() >= maxVariants) {
                 break;
             }
         }
         
+        List<String> result = new ArrayList<>(resultSet);
         if (result.size() > maxVariants) {
             return result.subList(0, maxVariants);
         }
@@ -304,11 +307,11 @@ public class PayloadMutator {
     }
     
     public List<String> mutateWithRules(String payload, List<String> ruleNames, int depth) {
-        List<String> variants = new ArrayList<>();
-        variants.add(payload);
+        Set<String> variantSet = new LinkedHashSet<>();
+        variantSet.add(payload);
         
         if (depth <= 0) {
-            return variants;
+            return new ArrayList<>(variantSet);
         }
         
         for (String ruleName : ruleNames) {
@@ -316,18 +319,17 @@ public class PayloadMutator {
                 if (rule.getName().equals(ruleName) && rule.isEnabled()) {
                     try {
                         String mutated = rule.apply(payload);
-                        if (!mutated.equals(payload) && !variants.contains(mutated)) {
-                            variants.add(mutated);
+                        if (!mutated.equals(payload)) {
+                            variantSet.add(mutated);
                         }
                     } catch (Exception e) {
-                        // 忽略变异失败的情况
                     }
                     break;
                 }
             }
         }
         
-        return variants;
+        return new ArrayList<>(variantSet);
     }
     
     public List<String> getRuleNames() {
@@ -352,7 +354,7 @@ public class PayloadMutator {
     }
     
     public void setMaxDepth(int maxDepth) {
-        this.maxDepth = Math.max(1, Math.min(maxDepth, 5));
+        this.maxDepth = Math.max(1, Math.min(maxDepth, AppConfig.MAX_MUTATION_DEPTH));
     }
     
     public int getMaxVariants() {
@@ -360,7 +362,7 @@ public class PayloadMutator {
     }
     
     public void setMaxVariants(int maxVariants) {
-        this.maxVariants = Math.max(1, Math.min(maxVariants, 10000));
+        this.maxVariants = Math.max(1, Math.min(maxVariants, AppConfig.MAX_PAYLOAD_VARIANTS));
     }
     
     public int estimateVariantCount(int payloadCount, int depth) {

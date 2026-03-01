@@ -8,40 +8,35 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import burp.ConfigManager;
+import burp.AppConfig;
+import burp.util.ConcurrentTaskExecutor;
 
 public class OpenAICompatibleProvider implements AIProvider {
     
     private final ConfigManager configManager;
-    private static final int DEFAULT_TIMEOUT = 60000;
-    private static final int MAX_RETRIES = 3;
-    private static final int RETRY_DELAY_MS = 1000;
-    private static final int THREAD_POOL_SIZE = 10;
-    
-    private final ExecutorService executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+    private final ConcurrentTaskExecutor taskExecutor;
     
     public OpenAICompatibleProvider(ConfigManager configManager) {
         this.configManager = configManager;
+        this.taskExecutor = new ConcurrentTaskExecutor(AppConfig.THREAD_POOL_SIZE, AppConfig.TASK_QUEUE_CAPACITY);
     }
     
     public void shutdown() {
-        executorService.shutdown();
+        taskExecutor.shutdown();
         try {
-            if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
-                executorService.shutdownNow();
+            if (!taskExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                taskExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {
-            executorService.shutdownNow();
+            taskExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
     
@@ -98,7 +93,7 @@ public class OpenAICompatibleProvider implements AIProvider {
                                Consumer<String> onChunk,
                                Runnable onComplete,
                                Consumer<Exception> onError) {
-        executorService.submit(() -> {
+        taskExecutor.submitTask(() -> {
             try {
                 if (!isConfigured()) {
                     onError.accept(new Exception("API密钥未配置，请先配置API密钥"));
@@ -148,6 +143,7 @@ public class OpenAICompatibleProvider implements AIProvider {
                                         }
                                     }
                                 } catch (Exception e) {
+                                    System.err.println("Failed to parse SSE chunk: " + e.getMessage());
                                 }
                             }
                         }
@@ -264,12 +260,12 @@ public class OpenAICompatibleProvider implements AIProvider {
     private List<String> retryWithBackoff(String systemPrompt, String userPrompt, 
                                           String baseUrl, String model, int timeout, 
                                           int retryCount) throws Exception {
-        if (retryCount >= MAX_RETRIES) {
+        if (retryCount >= AppConfig.MAX_RETRIES) {
             throw new Exception("API请求失败，已达到最大重试次数");
         }
         
         try {
-            Thread.sleep(RETRY_DELAY_MS * (1 << retryCount));
+            Thread.sleep(AppConfig.RETRY_DELAY_MS * (1 << retryCount));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new Exception("请求被中断");
@@ -307,7 +303,8 @@ public class OpenAICompatibleProvider implements AIProvider {
                 return Integer.parseInt(timeoutStr) * 1000;
             }
         } catch (NumberFormatException e) {
+            System.err.println("Invalid timeout format: " + e.getMessage());
         }
-        return DEFAULT_TIMEOUT;
+        return AppConfig.DEFAULT_TIMEOUT_MS;
     }
 }

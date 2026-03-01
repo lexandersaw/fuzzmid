@@ -15,9 +15,9 @@ import org.yaml.snakeyaml.DumperOptions;
 public class ConfigManager {
     private final IBurpExtenderCallbacks callbacks;
     private final Properties properties;
-    private final String CONFIG_DIR_PATH = System.getProperty("user.home") + "/.config/fuzzMind";
-    private final String CONFIG_FILE_PATH = CONFIG_DIR_PATH + "/Config.yml";
-    private final String BACKUP_FILE_PATH = CONFIG_DIR_PATH + "/Config.yml.bak";
+    private final String CONFIG_DIR_PATH = System.getProperty("user.home") + "/" + AppConfig.CONFIG_DIR_NAME;
+    private final String CONFIG_FILE_PATH = CONFIG_DIR_PATH + "/" + AppConfig.CONFIG_FILE_NAME;
+    private final String BACKUP_FILE_PATH = CONFIG_DIR_PATH + "/" + AppConfig.CONFIG_FILE_NAME + ".bak";
     
     private Map<String, String> promptTemplates = new LinkedHashMap<>();
     private Map<String, String> promptNames = new LinkedHashMap<>();
@@ -26,10 +26,6 @@ public class ConfigManager {
     public static final String BASE_URL = "base_url";
     public static final String MODEL = "model";
     public static final String TIMEOUT = "timeout";
-    
-    private static final String DEFAULT_BASE_URL = "https://api.openai.com/v1/chat/completions";
-    private static final String DEFAULT_MODEL = "gpt-3.5-turbo";
-    private static final String DEFAULT_TIMEOUT = "60";
     
     public ConfigManager(IBurpExtenderCallbacks callbacks) {
         this.callbacks = callbacks;
@@ -414,23 +410,23 @@ public class ConfigManager {
                     if (apiConfig.containsKey("base_url")) {
                         properties.setProperty(BASE_URL, String.valueOf(apiConfig.get("base_url")));
                     } else {
-                        properties.setProperty(BASE_URL, DEFAULT_BASE_URL);
+                        properties.setProperty(BASE_URL, AppConfig.DEFAULT_BASE_URL);
                     }
                     if (apiConfig.containsKey("model")) {
                         properties.setProperty(MODEL, String.valueOf(apiConfig.get("model")));
                     } else {
-                        properties.setProperty(MODEL, DEFAULT_MODEL);
+                        properties.setProperty(MODEL, AppConfig.DEFAULT_MODEL);
                     }
                     if (apiConfig.containsKey("timeout")) {
                         properties.setProperty(TIMEOUT, String.valueOf(apiConfig.get("timeout")));
                     } else {
-                        properties.setProperty(TIMEOUT, DEFAULT_TIMEOUT);
+                        properties.setProperty(TIMEOUT, "60");
                     }
                 }
             } else {
-                properties.setProperty(BASE_URL, DEFAULT_BASE_URL);
-                properties.setProperty(MODEL, DEFAULT_MODEL);
-                properties.setProperty(TIMEOUT, DEFAULT_TIMEOUT);
+                properties.setProperty(BASE_URL, AppConfig.DEFAULT_BASE_URL);
+                properties.setProperty(MODEL, AppConfig.DEFAULT_MODEL);
+                properties.setProperty(TIMEOUT, "60");
             }
             
             if (config.containsKey("prompt_names")) {
@@ -481,9 +477,9 @@ public class ConfigManager {
     
     private boolean createDefaultConfig() {
         try {
-            properties.setProperty(BASE_URL, DEFAULT_BASE_URL);
-            properties.setProperty(MODEL, DEFAULT_MODEL);
-            properties.setProperty(TIMEOUT, DEFAULT_TIMEOUT);
+            properties.setProperty(BASE_URL, AppConfig.DEFAULT_BASE_URL);
+            properties.setProperty(MODEL, AppConfig.DEFAULT_MODEL);
+            properties.setProperty(TIMEOUT, "60");
             saveConfigToFile();
             return true;
         } catch (Exception e) {
@@ -504,8 +500,8 @@ public class ConfigManager {
     
     public void saveConfig(String apiKey, String baseUrl, String model) {
         properties.setProperty(API_KEY, apiKey != null ? apiKey : "");
-        properties.setProperty(BASE_URL, baseUrl != null ? baseUrl : DEFAULT_BASE_URL);
-        properties.setProperty(MODEL, model != null ? model : DEFAULT_MODEL);
+        properties.setProperty(BASE_URL, baseUrl != null ? baseUrl : AppConfig.DEFAULT_BASE_URL);
+        properties.setProperty(MODEL, model != null ? model : AppConfig.DEFAULT_MODEL);
         saveConfigToFile();
         
         callbacks.saveExtensionSetting(API_KEY, apiKey);
@@ -515,9 +511,9 @@ public class ConfigManager {
     
     public void saveConfig(String apiKey, String baseUrl, String model, String timeout) {
         properties.setProperty(API_KEY, apiKey != null ? apiKey : "");
-        properties.setProperty(BASE_URL, baseUrl != null ? baseUrl : DEFAULT_BASE_URL);
-        properties.setProperty(MODEL, model != null ? model : DEFAULT_MODEL);
-        properties.setProperty(TIMEOUT, timeout != null ? timeout : DEFAULT_TIMEOUT);
+        properties.setProperty(BASE_URL, baseUrl != null ? baseUrl : AppConfig.DEFAULT_BASE_URL);
+        properties.setProperty(MODEL, model != null ? model : AppConfig.DEFAULT_MODEL);
+        properties.setProperty(TIMEOUT, timeout != null ? timeout : "60");
         saveConfigToFile();
         
         callbacks.saveExtensionSetting(API_KEY, apiKey);
@@ -550,9 +546,9 @@ public class ConfigManager {
             
             Map<String, String> apiConfig = new LinkedHashMap<>();
             apiConfig.put("api_key", properties.getProperty(API_KEY, ""));
-            apiConfig.put("base_url", properties.getProperty(BASE_URL, DEFAULT_BASE_URL));
-            apiConfig.put("model", properties.getProperty(MODEL, DEFAULT_MODEL));
-            apiConfig.put("timeout", properties.getProperty(TIMEOUT, DEFAULT_TIMEOUT));
+            apiConfig.put("base_url", properties.getProperty(BASE_URL, AppConfig.DEFAULT_BASE_URL));
+            apiConfig.put("model", properties.getProperty(MODEL, AppConfig.DEFAULT_MODEL));
+            apiConfig.put("timeout", properties.getProperty(TIMEOUT, "60"));
             config.put("api", apiConfig);
             
             config.put("prompt_names", new LinkedHashMap<>(promptNames));

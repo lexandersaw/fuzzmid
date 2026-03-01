@@ -14,7 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import burp.AppConfig;
+
 public class AIResponseCache {
+    
+    private static final long MILLIS_PER_HOUR = 60L * 60 * 1000;
     
     private final String cacheDirPath;
     private final int maxSize;
@@ -48,7 +52,7 @@ public class AIResponseCache {
         public boolean isExpired(int expireHours) {
             if (expireHours <= 0) return false;
             long elapsed = System.currentTimeMillis() - timestamp;
-            return elapsed > (expireHours * 60 * 60 * 1000L);
+            return elapsed > (expireHours * MILLIS_PER_HOUR);
         }
         
         public JSONObject toJson() {
@@ -91,14 +95,14 @@ public class AIResponseCache {
     }
     
     public AIResponseCache() {
-        this(true, 100, 24);
+        this(true, AppConfig.AI_CACHE_MAX_SIZE, AppConfig.AI_CACHE_EXPIRE_HOURS);
     }
     
     public AIResponseCache(boolean enabled, int maxSize, int expireHours) {
         this.enabled = enabled;
         this.maxSize = maxSize;
         this.expireHours = expireHours;
-        this.cacheDirPath = System.getProperty("user.home") + "/.config/fuzzMind/cache";
+        this.cacheDirPath = System.getProperty("user.home") + "/" + AppConfig.CONFIG_DIR_NAME + "/" + AppConfig.CACHE_DIR_NAME;
         this.cache = new ConcurrentHashMap<>();
         
         if (enabled) {

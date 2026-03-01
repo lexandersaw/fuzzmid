@@ -94,6 +94,7 @@ public class OpenAICompatibleProvider implements AIProvider {
                                Runnable onComplete,
                                Consumer<Exception> onError) {
         taskExecutor.submitTask(() -> {
+            HttpURLConnection connection = null;
             try {
                 if (!isConfigured()) {
                     onError.accept(new Exception("API密钥未配置，请先配置API密钥"));
@@ -107,56 +108,55 @@ public class OpenAICompatibleProvider implements AIProvider {
                 
                 JSONObject requestJson = buildRequestJson(systemPrompt, userPrompt, model, true);
                 
-                HttpURLConnection connection = createConnection(baseUrl, timeout);
+                connection = createConnection(baseUrl, timeout);
                 
-                try {
-                    writeRequest(connection, requestJson.toString());
-                    
-                    int responseCode = connection.getResponseCode();
-                    if (responseCode != 200) {
-                        String errorResponse = readErrorResponse(connection);
-                        onError.accept(new Exception("API请求失败，状态码: " + responseCode + ", 错误信息: " + errorResponse));
-                        return;
-                    }
-                    
-                    StringBuilder fullContent = new StringBuilder();
-                    
-                    try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            if (line.startsWith("data: ")) {
-                                String data = line.substring(6);
-                                if ("[DONE]".equals(data)) {
-                                    break;
-                                }
-                                
-                                try {
-                                    JSONObject chunkJson = new JSONObject(data);
-                                    JSONArray choices = chunkJson.getJSONArray("choices");
-                                    if (choices.length() > 0) {
-                                        JSONObject delta = choices.getJSONObject(0).optJSONObject("delta");
-                                        if (delta != null && delta.has("content")) {
-                                            String content = delta.getString("content");
-                                            fullContent.append(content);
-                                            onChunk.accept(content);
-                                        }
+                writeRequest(connection, requestJson.toString());
+                
+                int responseCode = connection.getResponseCode();
+                if (responseCode != 200) {
+                    String errorResponse = readErrorResponse(connection);
+                    onError.accept(new Exception("API请求失败，状态码: " + responseCode + ", 错误信息: " + errorResponse));
+                    return;
+                }
+                
+                StringBuilder fullContent = new StringBuilder();
+                
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.startsWith("data: ")) {
+                            String data = line.substring(6);
+                            if ("[DONE]".equals(data)) {
+                                break;
+                            }
+                            
+                            try {
+                                JSONObject chunkJson = new JSONObject(data);
+                                JSONArray choices = chunkJson.getJSONArray("choices");
+                                if (choices.length() > 0) {
+                                    JSONObject delta = choices.getJSONObject(0).optJSONObject("delta");
+                                    if (delta != null && delta.has("content")) {
+                                        String content = delta.getString("content");
+                                        fullContent.append(content);
+                                        onChunk.accept(content);
                                     }
-                                } catch (Exception e) {
-                                    System.err.println("Failed to parse SSE chunk: " + e.getMessage());
                                 }
+                            } catch (Exception e) {
+                                System.err.println("Failed to parse SSE chunk: " + e.getMessage());
                             }
                         }
                     }
-                    
-                    onComplete.run();
-                    
-                } finally {
-                    connection.disconnect();
                 }
+                
+                onComplete.run();
                 
             } catch (Exception e) {
                 onError.accept(e);
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
             }
         });
     }

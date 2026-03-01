@@ -269,6 +269,27 @@ public class AIResponseCache {
             cache.remove(key);
             deleteCacheFile(key);
         }
+        
+        cleanOrphanedCacheFiles();
+    }
+    
+    private void cleanOrphanedCacheFiles() {
+        File cacheDir = new File(cacheDirPath);
+        if (!cacheDir.exists() || !cacheDir.isDirectory()) {
+            return;
+        }
+        
+        File[] files = cacheDir.listFiles((dir, name) -> name.endsWith(".json"));
+        if (files == null) return;
+        
+        for (File file : files) {
+            String fileName = file.getName();
+            String key = fileName.substring(0, fileName.length() - 5);
+            
+            if (!cache.containsKey(key)) {
+                file.delete();
+            }
+        }
     }
     
     private void loadCache() {

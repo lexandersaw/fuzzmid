@@ -63,7 +63,7 @@ public class FuzzMindTab extends JPanel {
     
     private volatile boolean isGenerating = false;
     private final Object generateLock = new Object();
-    private Thread currentGenerateThread;
+    private volatile Thread currentGenerateThread;
     
     public FuzzMindTab(IBurpExtenderCallbacks callbacks, DictionaryManager dictionaryManager, ConfigManager configManager) {
         this.callbacks = callbacks;
@@ -632,12 +632,17 @@ public class FuzzMindTab extends JPanel {
     }
     
     private void cancelGeneration() {
+        Thread threadToCancel;
         synchronized (generateLock) {
-            if (currentGenerateThread != null && currentGenerateThread.isAlive()) {
-                currentGenerateThread.interrupt();
-            }
+            threadToCancel = currentGenerateThread;
+            currentGenerateThread = null;
             isGenerating = false;
         }
+        
+        if (threadToCancel != null && threadToCancel.isAlive()) {
+            threadToCancel.interrupt();
+        }
+        
         SwingUtilities.invokeLater(() -> {
             generateButton.setText("生成字典");
             generateButton.setEnabled(true);
@@ -645,7 +650,7 @@ public class FuzzMindTab extends JPanel {
     }
     
     private void generateDictionaryNormal(String selectedType, String prompt) {
-        currentGenerateThread = new Thread(() -> {
+        Thread newThread = new Thread(() -> {
             final StringBuilder localBuffer = new StringBuilder();
             try {
                 final List<String> generatedPayloads = aiGenerator.generateDictionary(selectedType, prompt);
@@ -693,13 +698,16 @@ public class FuzzMindTab extends JPanel {
                 });
             }
         });
-        currentGenerateThread.start();
+        synchronized (generateLock) {
+            currentGenerateThread = newThread;
+        }
+        newThread.start();
     }
     
     private void generateDictionaryStream(String selectedType, String prompt) {
         final StringBuilder localBuffer = new StringBuilder();
         
-        currentGenerateThread = new Thread(() -> {
+        Thread newThread = new Thread(() -> {
             aiGenerator.generateDictionaryStream(selectedType, prompt,
                 chunk -> {
                     if (Thread.currentThread().isInterrupted()) {
@@ -762,7 +770,10 @@ public class FuzzMindTab extends JPanel {
                 }
             );
         });
-        currentGenerateThread.start();
+        synchronized (generateLock) {
+            currentGenerateThread = newThread;
+        }
+        newThread.start();
     }
     
     private List<String> processGeneratedText(String text) {

@@ -574,6 +574,7 @@ public class ConfigManager {
     
     public void setConfig(String key, String value) {
         properties.setProperty(key, value);
+        saveConfigToFile();
     }
     
     public Map<String, String> getPromptTemplates() {

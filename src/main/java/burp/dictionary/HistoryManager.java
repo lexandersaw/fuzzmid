@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.json.JSONArray;
@@ -15,7 +17,9 @@ public class HistoryManager {
     
     private final String historyDirPath;
     private final int maxHistoryEntries;
-    private final Map<String, HistoryEntry> history;
+    private final ConcurrentHashMap<String, HistoryEntry> history;
+    private final ConcurrentLinkedQueue<String> insertionOrder;
+    private final Object historyLock = new Object();
     
     public static class HistoryEntry {
         private String id;
@@ -109,7 +113,8 @@ public class HistoryManager {
     public HistoryManager() {
         this.historyDirPath = System.getProperty("user.home") + "/.config/fuzzMind/history";
         this.maxHistoryEntries = 100;
-        this.history = new LinkedHashMap<>();
+        this.history = new ConcurrentHashMap<>();
+        this.insertionOrder = new ConcurrentLinkedQueue<>();
         
         createHistoryDir();
         loadHistory();
@@ -127,12 +132,17 @@ public class HistoryManager {
         HistoryEntry entry = new HistoryEntry(dictionaryName, promptType, prompt, 
                                               generatedPayloads, model, baseUrl);
         
-        history.put(entry.getId(), entry);
-        
-        if (history.size() > maxHistoryEntries) {
-            String oldestKey = history.keySet().iterator().next();
-            history.remove(oldestKey);
-            deleteHistoryFile(oldestKey);
+        synchronized (historyLock) {
+            history.put(entry.getId(), entry);
+            insertionOrder.add(entry.getId());
+            
+            if (history.size() > maxHistoryEntries) {
+                String oldestKey = insertionOrder.poll();
+                if (oldestKey != null) {
+                    history.remove(oldestKey);
+                    deleteHistoryFile(oldestKey);
+                }
+            }
         }
         
         saveHistoryEntry(entry);
@@ -143,7 +153,16 @@ public class HistoryManager {
     }
     
     public List<HistoryEntry> getAllHistoryEntries() {
-        return new ArrayList<>(history.values());
+        synchronized (historyLock) {
+            List<HistoryEntry> entries = new ArrayList<>();
+            for (String key : insertionOrder) {
+                HistoryEntry entry = history.get(key);
+                if (entry != null) {
+                    entries.add(entry);
+                }
+            }
+            return entries;
+        }
     }
     
     public List<HistoryEntry> getHistoryByType(String promptType) {
@@ -159,12 +178,18 @@ public class HistoryManager {
     }
     
     public void deleteHistoryEntry(String id) {
-        history.remove(id);
+        synchronized (historyLock) {
+            history.remove(id);
+            insertionOrder.remove(id);
+        }
         deleteHistoryFile(id);
     }
     
     public void clearHistory() {
-        history.clear();
+        synchronized (historyLock) {
+            history.clear();
+            insertionOrder.clear();
+        }
         File historyDir = new File(historyDirPath);
         if (historyDir.exists() && historyDir.isDirectory()) {
             File[] files = historyDir.listFiles((dir, name) -> name.endsWith(".json"));
@@ -206,24 +231,27 @@ public class HistoryManager {
             return;
         }
         
+        List<HistoryEntry> tempList = new ArrayList<>();
         for (File file : files) {
             try {
                 HistoryEntry entry = parseHistoryFile(file);
                 if (entry != null && entry.getId() != null && !entry.getId().isEmpty()) {
-                    history.put(entry.getId(), entry);
+                    tempList.add(entry);
                 }
             } catch (Exception e) {
                 System.err.println("Failed to parse history file: " + file.getName() + " - " + e.getMessage());
             }
         }
         
-        List<HistoryEntry> sorted = history.values().stream()
-                .sorted(Comparator.comparingLong(HistoryEntry::getTimestamp))
-                .collect(Collectors.toList());
+        tempList.sort(Comparator.comparingLong(HistoryEntry::getTimestamp));
         
-        history.clear();
-        for (HistoryEntry entry : sorted) {
-            history.put(entry.getId(), entry);
+        synchronized (historyLock) {
+            history.clear();
+            insertionOrder.clear();
+            for (HistoryEntry entry : tempList) {
+                history.put(entry.getId(), entry);
+                insertionOrder.add(entry.getId());
+            }
         }
     }
     

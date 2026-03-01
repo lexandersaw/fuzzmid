@@ -21,8 +21,6 @@ import burp.util.vuln.VulnerabilityPatternMatcher.MatchResult;
 import burp.workflow.WorkflowEngine;
 import burp.workflow.WorkflowResult;
 import burp.workflow.WorkflowContext;
-import burp.workflow.WorkflowEngine;
-import burp.workflow.WorkflowResult;
 
 public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFactory, ITab, IContextMenuFactory {
 

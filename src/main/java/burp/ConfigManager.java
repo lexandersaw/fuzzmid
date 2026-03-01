@@ -382,6 +382,7 @@ public class ConfigManager {
             if (!configFile.exists()) {
                 if (!configDir.exists()) {
                     configDir.mkdirs();
+                    setDirectoryPermissions(configDir);
                 }
                 saveConfigToFile();
                 return true;
@@ -640,5 +641,11 @@ public class ConfigManager {
     public boolean hasApiKey() {
         String apiKey = getConfig(API_KEY);
         return apiKey != null && !apiKey.trim().isEmpty();
+    }
+    
+    private void setDirectoryPermissions(File dir) {
+        dir.setExecutable(false);
+        dir.setReadable(true);
+        dir.setWritable(true);
     }
 }

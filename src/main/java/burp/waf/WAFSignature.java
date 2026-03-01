@@ -5,8 +5,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class WAFSignature {
+    
+    private static final Map<String, Pattern> patternCache = new ConcurrentHashMap<>();
     
     private String id;
     private String name;
@@ -15,6 +18,11 @@ public class WAFSignature {
     private List<SignatureRule> rules;
     private List<String> bypassTechniques;
     private int confidence;
+    
+    private static Pattern getCompiledPattern(String regex) {
+        return patternCache.computeIfAbsent(regex, 
+            r -> Pattern.compile(r, Pattern.CASE_INSENSITIVE));
+    }
     
     public enum WAFType {
         CLOUD,      // 云WAF
@@ -149,7 +157,8 @@ public class WAFSignature {
                 boolean headerMatched = false;
                 for (Map.Entry<String, String> entry : headers.entrySet()) {
                     String headerLine = entry.getKey() + ": " + entry.getValue();
-                    if (Pattern.compile(headerPattern, Pattern.CASE_INSENSITIVE).matcher(headerLine).find()) {
+                    Pattern pattern = getCompiledPattern(headerPattern);
+                    if (pattern.matcher(headerLine).find()) {
                         headerMatched = true;
                         break;
                     }
@@ -160,7 +169,8 @@ public class WAFSignature {
             }
             
             if (bodyPattern != null && responseBody != null) {
-                if (!Pattern.compile(bodyPattern, Pattern.CASE_INSENSITIVE).matcher(responseBody).find()) {
+                Pattern pattern = getCompiledPattern(bodyPattern);
+                if (!pattern.matcher(responseBody).find()) {
                     return false;
                 }
             }

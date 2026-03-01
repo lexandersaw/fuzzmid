@@ -8,7 +8,8 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.LinkedHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -18,30 +19,31 @@ public class AIResponseCache {
     private final String cacheDirPath;
     private final int maxSize;
     private final int expireHours;
-    private final Map<String, CacheEntry> cache;
+    private final ConcurrentHashMap<String, CacheEntry> cache;
     private final boolean enabled;
+    private final Object evictionLock = new Object();
     
     public static class CacheEntry {
         private String key;
         private List<String> response;
         private long timestamp;
         private String model;
-        private int hitCount;
+        private AtomicInteger hitCount;
         
         public CacheEntry(String key, List<String> response, String model) {
             this.key = key;
             this.response = new ArrayList<>(response);
             this.timestamp = System.currentTimeMillis();
             this.model = model;
-            this.hitCount = 0;
+            this.hitCount = new AtomicInteger(0);
         }
         
         public String getKey() { return key; }
         public List<String> getResponse() { return new ArrayList<>(response); }
         public long getTimestamp() { return timestamp; }
         public String getModel() { return model; }
-        public int getHitCount() { return hitCount; }
-        public void incrementHitCount() { hitCount++; }
+        public int getHitCount() { return hitCount.get(); }
+        public void incrementHitCount() { hitCount.incrementAndGet(); }
         
         public boolean isExpired(int expireHours) {
             if (expireHours <= 0) return false;
@@ -83,7 +85,7 @@ public class AIResponseCache {
             
             CacheEntry entry = new CacheEntry(key, response, model);
             entry.timestamp = timestamp;
-            entry.hitCount = hitCount;
+            entry.hitCount.set(hitCount);
             return entry;
         }
     }
@@ -226,23 +228,27 @@ public class AIResponseCache {
     }
     
     private void evictLRU() {
-        String oldestKey = null;
-        long oldestTime = Long.MAX_VALUE;
-        int lowestHits = Integer.MAX_VALUE;
-        
-        for (Map.Entry<String, CacheEntry> entry : cache.entrySet()) {
-            CacheEntry ce = entry.getValue();
-            if (ce.getHitCount() < lowestHits || 
-                (ce.getHitCount() == lowestHits && ce.getTimestamp() < oldestTime)) {
-                lowestHits = ce.getHitCount();
-                oldestTime = ce.getTimestamp();
-                oldestKey = entry.getKey();
+        synchronized (evictionLock) {
+            if (cache.size() < maxSize) return;
+            
+            String oldestKey = null;
+            long oldestTime = Long.MAX_VALUE;
+            int lowestHits = Integer.MAX_VALUE;
+            
+            for (Map.Entry<String, CacheEntry> entry : cache.entrySet()) {
+                CacheEntry ce = entry.getValue();
+                if (ce.getHitCount() < lowestHits || 
+                    (ce.getHitCount() == lowestHits && ce.getTimestamp() < oldestTime)) {
+                    lowestHits = ce.getHitCount();
+                    oldestTime = ce.getTimestamp();
+                    oldestKey = entry.getKey();
+                }
             }
-        }
-        
-        if (oldestKey != null) {
-            cache.remove(oldestKey);
-            deleteCacheFile(oldestKey);
+            
+            if (oldestKey != null) {
+                cache.remove(oldestKey);
+                deleteCacheFile(oldestKey);
+            }
         }
     }
     

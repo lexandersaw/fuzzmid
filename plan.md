@@ -510,20 +510,17 @@ src/main/java/burp/util/
 
 | 任务 | 状态 | 预计工时 |
 |------|------|----------|
-| API Key 加密存储 | 待实施 | 4h |
-| URL 白名单验证 (SSRF 防护) | 待实施 | 2h |
-| AIResponseCache 并发安全 | 待实施 | 2h |
-| 配置文件权限设置 | 待实施 | 1h |
+| AIResponseCache 并发安全 | **已完成** | 2h |
+| 配置文件权限设置 | **已完成** | 1h |
 
 ### 5.2 中优先级 (P1) - 代码优化
 
 | 任务 | 状态 | 预计工时 |
 |------|------|----------|
-| 正则表达式预编译 | 待实施 | 2h |
-| 资源管理增强 (null 检查) | 待实施 | 2h |
+| 正则表达式预编译 | **已完成** | 2h |
+| 资源管理增强 (null 检查) | **已完成** | 2h |
 | 线程池管理 | 待实施 | 3h |
-| 输入长度验证 | 待实施 | 2h |
-| 代码去重重构 | 待实施 | 3h |
+| 代码去重重构 | **已完成** | 3h |
 
 ### 5.3 低优先级 (P2) - 功能增强
 
@@ -696,33 +693,33 @@ src/main/java/burp/
 
 | 问题 | 文件 | 描述 | 状态 |
 |------|------|------|------|
-| 并发安全问题 | AIResponseCache.java | LinkedHashMap 非线程安全，多线程访问可能导致数据不一致 | 待修复 |
+| 并发安全问题 | AIResponseCache.java | LinkedHashMap 非线程安全，多线程访问可能导致数据不一致 | **已修复** |
 
 #### 10.1.2 中危问题
 
 | 问题 | 文件 | 描述 | 状态 |
 |------|------|------|------|
-| 配置文件权限 | ConfigManager.java | 创建配置目录时未设置适当权限 | 待修复 |
+| 配置文件权限 | ConfigManager.java | 创建配置目录时未设置适当权限 | **已修复** |
 | 缓存文件明文存储 | AIResponseCache.java | 缓存文件以明文存储敏感数据 | 待修复 |
-| 正则表达式 DoS | WAFSignature.java | 每次匹配重新编译正则，可能触发 ReDoS | 待修复 |
-| 资源泄漏 | OpenAICompatibleProvider.java | getErrorStream() 可能返回 null 导致 NPE | 待修复 |
+| 正则表达式 DoS | WAFSignature.java | 每次匹配重新编译正则，可能触发 ReDoS | **已修复** |
+| 资源泄漏 | OpenAICompatibleProvider.java | getErrorStream() 可能返回 null 导致 NPE | **已修复** |
 
 #### 10.1.3 低危问题
 
 | 问题 | 文件 | 描述 | 状态 |
 |------|------|------|------|
-| 异常信息泄露 | BurpExtender.java | 堆栈跟踪可能泄露内部实现 | 待修复 |
-| 输入长度未验证 | PayloadMutator.java | 未限制 payload 长度，可能内存溢出 | 待修复 |
-| 静态 Random 实例 | PayloadMutator.java | Random 多线程性能差 | 待修复 |
+| 异常信息泄露 | BurpExtender.java | 堆栈跟踪可能泄露内部实现 | **已修复** |
+| 输入长度未验证 | PayloadMutator.java | 未限制 payload 长度，可能内存溢出 | 已移除 |
+| 静态 Random 实例 | PayloadMutator.java | Random 多线程性能差 | **无需修复** |
 
 ### 10.2 代码质量问题
 
-| 问题 | 文件 | 描述 | 优先级 |
-|------|------|------|--------|
-| 代码重复 | BurpExtender.java | buildContextInfo 和 showContextAnalysisDialog 重复代码 | P2 |
-| 硬编码配置 | 多处 | 超时、重试次数等硬编码 | P2 |
-| 魔法数字 | AIResponseCache.java | 时间计算使用魔法数字 | P3 |
-| 空异常处理 | OpenAICompatibleProvider.java | 静默忽略异常 | P2 |
+| 问题 | 文件 | 描述 | 优先级 | 状态 |
+|------|------|------|--------|------|
+| 代码重复 | BurpExtender.java | buildContextInfo 和 showContextAnalysisDialog 重复代码 | P2 | **已修复** |
+| 硬编码配置 | 多处 | 超时、重试次数等硬编码 | P2 | 待修复 |
+| 魔法数字 | AIResponseCache.java | 时间计算使用魔法数字 | P3 | 待修复 |
+| 空异常处理 | OpenAICompatibleProvider.java | 静默忽略异常 | P2 | 待修复 |
 
 ### 10.3 功能完整性评估
 
@@ -767,20 +764,19 @@ src/main/java/burp/
 
 ### 11.1 安全加固 (P0)
 
-| 任务 | 描述 | 预计工时 |
-|------|------|----------|
-| 并发安全修复 | 使用 ConcurrentHashMap 替代 LinkedHashMap | 2h |
-| 配置文件权限 | 设置 700 权限 | 1h |
+| 任务 | 描述 | 预计工时 | 状态 |
+|------|------|----------|------|
+| 并发安全修复 | 使用 ConcurrentHashMap 替代 LinkedHashMap | 2h | **已完成** |
+| 配置文件权限 | 设置 700 权限 | 1h | **已完成** |
 
 ### 11.2 代码优化 (P1)
 
-| 任务 | 描述 | 预计工时 |
-|------|------|----------|
-| 正则预编译 | 缓存编译后的 Pattern 对象 | 2h |
-| 资源管理增强 | 添加 null 检查和 try-with-resources | 2h |
-| 线程池管理 | 使用有界线程池替代无限制创建 | 3h |
-| 输入验证 | 添加长度和格式验证 | 2h |
-| 代码去重 | 提取公共方法 | 3h |
+| 任务 | 描述 | 预计工时 | 状态 |
+|------|------|----------|------|
+| 正则预编译 | 缓存编译后的 Pattern 对象 | 2h | **已完成** |
+| 资源管理增强 | 添加 null 检查和 try-with-resources | 2h | **已完成** |
+| 线程池管理 | 使用有界线程池替代无限制创建 | 3h | 待实施 |
+| 代码去重 | 提取公共方法 | 3h | **已完成** |
 
 ### 11.3 功能增强 (P2)
 
@@ -870,37 +866,6 @@ src/main/java/burp/workflow/
 ├── WorkflowStep.java            # 工作流步骤
 ├── WorkflowContext.java         # 工作流上下文
 └── WorkflowResult.java          # 工作流结果
-```
-
----
-
-#### 14.1.2 测试报告自动生成器 [P0]
-
-| 项目 | 内容 |
-|------|------|
-| 功能名称 | 测试报告自动生成器 |
-| 解决问题 | 测试后需手动编写报告，耗时费力 |
-| 实现思路 | 收集测试发现，按模板生成报告 |
-| 实用价值 | 9/10 |
-
-**报告内容**:
-- 测试概要（目标、时间、范围）
-- 发现汇总（漏洞数量、严重程度分布）
-- 详细发现（每个漏洞的描述、证据、修复建议）
-- 测试统计（请求数、成功率）
-
-**报告格式**: Markdown / HTML / PDF
-
-**新增文件**:
-```
-src/main/java/burp/report/
-├── ReportGenerator.java         # 报告生成器
-├── ReportTemplate.java          # 报告模板
-├── ReportSection.java           # 报告章节
-├── VulnerabilityFinding.java    # 漏洞发现记录
-└── templates/
-    ├── markdown_template.md
-    └── html_template.html
 ```
 
 ---
@@ -1037,7 +1002,6 @@ src/main/java/burp/knowledge/
 | 功能 | 价值 | 工时 |
 |------|------|------|
 | 一键测试工作流 | 10/10 | 6h |
-| 测试报告自动生成器 | 9/10 | 6h |
 
 #### 第二优先级 (v3.3.0)
 
@@ -1075,7 +1039,7 @@ src/main/java/burp/knowledge/
 
 ### v3.2.0 待办事项 (实战增强)
 
-- **核心功能**: 一键工作流、报告生成
+- **核心功能**: 一键工作流
 - **效率提升**: 任务队列、智能推荐、知识库
 - **增强功能**: WAF 探测、监控面板、模板库、攻击链
 

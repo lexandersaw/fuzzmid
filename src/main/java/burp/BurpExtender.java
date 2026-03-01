@@ -326,12 +326,12 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
                     JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             fuzzMindTab.setGeneratingState(false);
+            String errorMsg = e.getMessage() != null ? e.getMessage() : "未知错误";
             JOptionPane.showMessageDialog(null,
-                    "生成 Payload 失败: " + e.getMessage(),
+                    "生成 Payload 失败: " + errorMsg,
                     "FuzzMind 错误",
                     JOptionPane.ERROR_MESSAGE);
-            callbacks.printError("FuzzMind Error: " + e.getMessage());
-            e.printStackTrace();
+            callbacks.printError("FuzzMind Error: " + errorMsg);
         }
     }
 
@@ -342,71 +342,7 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
 
         StringBuilder sb = new StringBuilder();
         sb.append("=== FuzzMind 上下文分析结果 ===\n\n");
-        sb.append("【基本信息】\n");
-        sb.append("  请求方法: ").append(context.getMethod() != null ? context.getMethod() : "未知").append("\n");
-        sb.append("  URL: ").append(context.getUrl() != null ? context.getUrl() : "未知").append("\n");
-        sb.append("  路径: ").append(context.getPath() != null ? context.getPath() : "未知").append("\n");
-        sb.append("  Content-Type: ").append(context.getContentType() != null ? context.getContentType() : "未知").append("\n");
-        sb.append("  服务器: ").append(context.getServerHeader() != null ? context.getServerHeader() : "未知").append("\n");
-        if (context.getPoweredBy() != null) {
-            sb.append("  X-Powered-By: ").append(context.getPoweredBy()).append("\n");
-        }
-        sb.append("\n");
-
-        sb.append("【检测到的技术栈】\n");
-        if (context.getTechnologies() != null && !context.getTechnologies().isEmpty()) {
-            for (String tech : context.getTechnologies()) {
-                sb.append("  - ").append(tech).append("\n");
-            }
-        } else {
-            sb.append("  未检测到明显技术栈\n");
-        }
-        sb.append("\n");
-
-        if (context.getFrameworks() != null && !context.getFrameworks().isEmpty()) {
-            sb.append("【检测到的框架】\n");
-            for (String fw : context.getFrameworks()) {
-                sb.append("  - ").append(fw).append("\n");
-            }
-            sb.append("\n");
-        }
-
-        if (context.getDatabases() != null && !context.getDatabases().isEmpty()) {
-            sb.append("【检测到的数据库】\n");
-            for (String db : context.getDatabases()) {
-                sb.append("  - ").append(db).append("\n");
-            }
-            sb.append("\n");
-        }
-
-        sb.append("【参数列表】\n");
-        if (context.getParameters() != null && !context.getParameters().isEmpty()) {
-            for (String param : context.getParameters()) {
-                sb.append("  - ").append(param).append("\n");
-            }
-        } else {
-            sb.append("  未检测到参数\n");
-        }
-        sb.append("\n");
-
-        if (context.getCookies() != null && !context.getCookies().isEmpty()) {
-            sb.append("【Cookie列表】\n");
-            for (String cookie : context.getCookies()) {
-                sb.append("  - ").append(cookie).append("\n");
-            }
-            sb.append("\n");
-        }
-
-        if (context.getMissingSecurityHeaders() != null && !context.getMissingSecurityHeaders().isEmpty()) {
-            sb.append("【缺失的安全头】\n");
-            for (String header : context.getMissingSecurityHeaders()) {
-                sb.append("  - ").append(header).append("\n");
-            }
-            sb.append("\n");
-        }
-
-        sb.append("【建议的漏洞类型】\n");
-        sb.append("  ").append(suggestedVuln).append("\n");
+        sb.append(buildContextInfo(context, suggestedVuln));
 
         JTextArea textArea = new JTextArea(sb.toString());
         textArea.setEditable(false);
@@ -554,12 +490,12 @@ public class BurpExtender implements IBurpExtender, IIntruderPayloadGeneratorFac
                     JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception e) {
             fuzzMindTab.setGeneratingState(false);
+            String errorMsg = e.getMessage() != null ? e.getMessage() : "未知错误";
             JOptionPane.showMessageDialog(null,
-                    "生成 WAF 绕过变体失败: " + e.getMessage(),
+                    "生成 WAF 绕过变体失败: " + errorMsg,
                     "FuzzMind 错误",
                     JOptionPane.ERROR_MESSAGE);
-            callbacks.printError("FuzzMind Error: " + e.getMessage());
-            e.printStackTrace();
+            callbacks.printError("FuzzMind Error: " + errorMsg);
         }
     }
 

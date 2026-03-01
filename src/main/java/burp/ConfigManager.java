@@ -539,6 +539,8 @@ public class ConfigManager {
                 Files.copy(Paths.get(CONFIG_FILE_PATH), Paths.get(BACKUP_FILE_PATH));
             }
             
+            setDirectoryPermissions(configDir);
+            
             DumperOptions options = new DumperOptions();
             options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
             options.setPrettyFlow(true);
@@ -558,6 +560,8 @@ public class ConfigManager {
             
             String yamlContent = yaml.dump(config);
             Files.write(Paths.get(CONFIG_FILE_PATH), yamlContent.getBytes(StandardCharsets.UTF_8));
+            
+            setFilePermissions(configFile);
             
         } catch (Exception e) {
             callbacks.printError("Failed to save config file: " + e.getMessage());
@@ -644,8 +648,15 @@ public class ConfigManager {
     }
     
     private void setDirectoryPermissions(File dir) {
-        dir.setExecutable(false);
-        dir.setReadable(true);
-        dir.setWritable(true);
+        dir.setExecutable(false, false);
+        dir.setReadable(true, true);
+        dir.setWritable(true, true);
+        dir.setExecutable(true, true);
+    }
+    
+    private void setFilePermissions(File file) {
+        file.setReadable(true, true);
+        file.setWritable(true, true);
+        file.setExecutable(false, false);
     }
 }

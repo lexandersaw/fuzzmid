@@ -99,7 +99,7 @@ public class AIResponseCache {
         this.maxSize = maxSize;
         this.expireHours = expireHours;
         this.cacheDirPath = System.getProperty("user.home") + "/.config/fuzzMind/cache";
-        this.cache = new LinkedHashMap<>();
+        this.cache = new ConcurrentHashMap<>();
         
         if (enabled) {
             createCacheDir();

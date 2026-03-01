@@ -339,7 +339,7 @@ public class EnhancedDictionaryManager {
             
             return entries.size();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Failed to save dictionary file: " + e.getMessage());
             return 0;
         }
     }
@@ -365,7 +365,7 @@ public class EnhancedDictionaryManager {
                 List<String> entries = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
                 savedDictionaries.put(name, new DictionaryEntry(name, entries));
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("Failed to load dictionary file: " + file.getName() + " - " + e.getMessage());
             }
         }
     }

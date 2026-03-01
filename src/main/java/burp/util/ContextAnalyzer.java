@@ -125,7 +125,7 @@ public class ContextAnalyzer {
             detectDatabases(context);
             analyzeSecurityHeaders(message, context);
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("Failed to analyze request context: " + e.getMessage());
         }
         
         return context;

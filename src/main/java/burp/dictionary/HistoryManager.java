@@ -186,7 +186,7 @@ public class HistoryManager {
             Files.write(Paths.get(filePath), jsonStr.getBytes(StandardCharsets.UTF_8));
             
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Failed to save history file: " + e.getMessage());
         }
     }
     
